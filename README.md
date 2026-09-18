@@ -11,9 +11,17 @@ No account, install, or login needed. Any modern browser works.
 ## How to use
 
 1. Open the link above.
-2. Drag in one or more statement PDFs (or click to browse).
+2. Drag in your statement PDFs, or click to browse. One file or fifteen — select
+   them all at once, and each file's bank is detected on its own.
 3. Review the extracted transactions on screen.
-4. Download — one combined CSV, or a .zip with one CSV per statement.
+4. Download, choosing one of two shapes:
+   - **One combined CSV** — every transaction from every statement in a single
+     file. Usually what you want: it imports in one pass.
+   - **Separate CSV per statement (.zip)** — one file per statement, named after
+     the PDF it came from. Use this when each statement has to stay on its own.
+
+   With a single statement loaded there's no choice to make; you just get a
+   Download CSV button.
 
 The CSV columns are `Date, Vendor, Description, Amount`. Credits and payments
 come through as negative amounts.

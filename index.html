@@ -176,6 +176,14 @@
     font-family:'IBM Plex Mono',monospace;
     color:var(--orange-dark);
   }
+  .prompt-card .qsub{
+    font-weight:400;
+    font-size:13px;
+    line-height:1.5;
+    color:var(--ink-soft);
+    margin-top:5px;
+    max-width:48ch;
+  }
   .prompt-card .choices{display:flex;gap:10px;}
   button.primary{
     background:var(--orange);
@@ -346,12 +354,12 @@
   </header>
 
   <h1>Turn statement PDFs into clean CSVs</h1>
-  <p class="lede">Drop in one or more bank or credit-card statement PDFs. The format is detected automatically — there's nothing to choose. Everything happens in this browser tab: your statements are never uploaded to a server.</p>
+  <p class="lede">Drop in one statement or fifteen — each file's format is detected automatically, so there's nothing to set up. Once they're read, you choose how to download: <strong>one combined CSV</strong> holding every transaction, or a <strong>separate CSV per statement</strong> in a .zip. Everything happens in this browser tab — your statements are never uploaded to a server.</p>
 
   <div class="dropzone" id="dropzone">
     <div class="icon"><i>&#8593;</i></div>
     <div class="title">Drop PDF statements here, or click to browse</div>
-    <div class="sub">You can select more than one at a time</div>
+    <div class="sub">Add one file or a whole stack — select them all at once</div>
     <input type="file" id="fileInput" accept="application/pdf" multiple>
   </div>
 
@@ -1109,7 +1117,9 @@ function renderResults(){
     document.getElementById('downloadSingleBtn').addEventListener('click', downloadCombined);
   } else {
     downloadPromptEl.innerHTML = `<div class="prompt-card">
-      <div class="q">You've got <span class="n">${ok.length}</span> statements ready. How do you want the CSVs?</div>
+      <div class="q">All <span class="n">${ok.length}</span> statements are ready. How do you want the CSVs?
+        <div class="qsub">One combined file is usually the way to go — every transaction lands in a single CSV you can import in one pass. Choose separate files only if each statement has to stay on its own.</div>
+      </div>
       <div class="choices">
         <button class="secondary" id="downloadZipBtn">Separate CSV per statement (.zip)</button>
         <button class="primary" id="downloadBtn">One combined CSV</button>
