@@ -449,12 +449,20 @@ function extractPageText(items){
 }
 
 // ============================================================
-// Usage logging / error alerts (optional)
-// Paste your Google Apps Script Web App URL here (see AppsScript_Code.gs
-// for the backend to deploy). Leave blank to disable logging entirely —
-// the app works fine without it, this just feeds the shared usage log.
+// Usage logging / bug reports (optional)
+// Leave blank to disable logging entirely — the app works fine without it.
+//
+// Currently blank on purpose. The Apps Script web app this originally pointed
+// at returns 401 to anonymous requests (Google redirects them to a sign-in
+// page), because the housecallpro.com Workspace policy blocks sharing Apps
+// Script web apps outside the domain. A Google Form backend is replacing it.
+//
+// Do not fill this in without first confirming an anonymous POST actually
+// succeeds — a non-empty endpoint makes the bug-report modal report success,
+// so a silently-broken endpoint means users are told their report was
+// submitted when nothing was recorded.
 // ============================================================
-const LOG_ENDPOINT = 'https://script.google.com/a/macros/housecallpro.com/s/AKfycbxOR1-spsATqgGynT8isyszOdTe6PPBG7bdLjvOQCQ1rJ6x65f9EmHt9W63Qrov4IV4/exec';
+const LOG_ENDPOINT = '';
 
 function logEvent(payload){
   if (!LOG_ENDPOINT) return;
@@ -1203,8 +1211,8 @@ document.getElementById('bugSubmitBtn').addEventListener('click', () => {
     status: 'reported'
   });
   bugStatusEl.textContent = LOG_ENDPOINT
-    ? 'Thanks — your report was sent.'
-    : 'Logging isn\'t configured yet in this copy of the app, so this report wasn\'t sent anywhere. Ask whoever manages the app to set up LOG_ENDPOINT.';
+    ? 'Thanks — your report has been submitted.'
+    : 'Bug reporting isn\'t switched on in this copy of the app, so nothing was sent. Please pass these details to whoever shared this link with you.';
   bugStatusEl.className = 'modal-status ' + (LOG_ENDPOINT ? 'ok' : 'err');
   document.getElementById('bugDescription').value = '';
   if (LOG_ENDPOINT) setTimeout(() => bugModalBackdrop.classList.remove('open'), 1600);
