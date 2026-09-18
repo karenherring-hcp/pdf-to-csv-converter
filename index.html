@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF to CSV Converter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --paper:#F6F3EC;
+    --card:#FFFFFF;
+    --ink:#241F1A;
+    --ink-soft:#6B6459;
+    --line:#DEDACE;
+    --line-strong:#C7C1B2;
+    --orange:#F96302;
+    --orange-dark:#B84800;
+    --green:#2F6F4E;
+    --green-bg:#E7F1EA;
+    --red:#B3261E;
+    --red-bg:#FBEAE9;
+    --stripe:#F0ECE2;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{
+    max-width:900px;
+    margin:0 auto;
+    padding:56px 24px 96px;
+  }
+  header.top{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    margin-bottom:40px;
+    border-bottom:2px solid var(--ink);
+    padding-bottom:16px;
+  }
+  header.top .mark{
+    font-weight:600;
+    font-size:15px;
+    letter-spacing:0.02em;
+  }
+  header.top .mark span{color:var(--orange);}
+  header.top .count{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+    color:var(--ink-soft);
+  }
+  h1{
+    font-size:34px;
+    font-weight:600;
+    line-height:1.2;
+    margin:0 0 10px;
+    max-width:14ch;
+  }
+  p.lede{
+    font-size:16px;
+    line-height:1.55;
+    color:var(--ink-soft);
+    max-width:52ch;
+    margin:0 0 40px;
+  }
+  .dropzone{
+    border:2px dashed var(--line-strong);
+    border-radius:4px;
+    background:var(--card);
+    padding:48px 32px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .dropzone.drag{
+    border-color:var(--orange);
+    background:#FFF6EF;
+  }
+  .dropzone .icon{
+    width:40px;height:40px;margin:0 auto 16px;
+    border:2px solid var(--ink);
+    border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-size:18px;
+  }
+  .dropzone .title{
+    font-weight:500;
+    font-size:16px;
+    margin-bottom:6px;
+  }
+  .dropzone .sub{
+    font-size:13px;
+    color:var(--ink-soft);
+  }
+  input[type=file]{display:none;}
+  .queue{margin-top:32px;}
+  .row{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    padding:14px 16px;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:4px;
+    margin-bottom:8px;
+  }
+  .row .dot{
+    width:9px;height:9px;border-radius:50%;
+    flex:none;
+    background:var(--line-strong);
+  }
+  .row.ok .dot{background:var(--green);}
+  .row.err .dot{background:var(--red);}
+  .row.busy .dot{background:var(--orange);animation:pulse 1s infinite ease-in-out;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.25;}}
+  .row .name{
+    font-weight:500;
+    font-size:14px;
+    flex:1;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .row .status{
+    font-size:13px;
+    color:var(--ink-soft);
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .row.err .status{color:var(--red);}
+  .row.ok .status{color:var(--green);}
+  .row button.remove{
+    border:none;background:none;color:var(--ink-soft);
+    font-size:16px;cursor:pointer;padding:2px 6px;
+  }
+  .row button.remove:hover{color:var(--ink);}
+
+  section.results{margin-top:48px;}
+  .results-head{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    margin-bottom:16px;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+  .results-head h2{
+    font-size:20px;
+    font-weight:600;
+    margin:0;
+  }
+  .actions{display:flex;gap:10px;}
+  .prompt-card{
+    background:#FFF6EF;
+    border:1px solid #F2C79A;
+    border-radius:4px;
+    padding:16px 18px;
+    margin-bottom:20px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:14px;
+  }
+  .prompt-card .q{
+    font-size:14px;
+    font-weight:500;
+  }
+  .prompt-card .q .n{
+    font-family:'IBM Plex Mono',monospace;
+    color:var(--orange-dark);
+  }
+  .prompt-card .choices{display:flex;gap:10px;}
+  button.primary{
+    background:var(--orange);
+    color:#fff;
+    border:none;
+    padding:11px 20px;
+    border-radius:4px;
+    font-weight:500;
+    font-size:14px;
+    cursor:pointer;
+  }
+  button.primary:hover{background:var(--orange-dark);}
+  button.secondary{
+    background:none;
+    border:1px solid var(--ink);
+    color:var(--ink);
+    padding:11px 20px;
+    border-radius:4px;
+    font-weight:500;
+    font-size:14px;
+    cursor:pointer;
+  }
+  button.secondary:hover{background:var(--ink);color:#fff;}
+
+  .accountcard{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:4px;
+    margin-bottom:20px;
+    overflow:hidden;
+  }
+  .accountcard .head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:14px 18px;
+    border-bottom:1px solid var(--line);
+    background:var(--stripe);
+  }
+  .accountcard .head .file{
+    font-size:13px;
+    font-weight:500;
+  }
+  .accountcard .head .bal{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:14px;
+    font-weight:500;
+  }
+  .grid3{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:1px;
+    background:var(--line);
+  }
+  .stat{
+    background:var(--card);
+    padding:14px 18px;
+  }
+  .stat .label{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--ink-soft);
+    margin-bottom:4px;
+  }
+  .stat .value{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:16px;
+    font-weight:500;
+  }
+  table.tx{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13px;
+  }
+  table.tx th{
+    text-align:left;
+    font-weight:500;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--ink-soft);
+    padding:10px 18px;
+    border-top:1px solid var(--line);
+    border-bottom:1px solid var(--line);
+  }
+  table.tx td{
+    padding:9px 18px;
+    border-bottom:1px solid var(--line);
+    font-family:'IBM Plex Mono',monospace;
+  }
+  table.tx tr:last-child td{border-bottom:none;}
+  table.tx td.amt{text-align:right;white-space:nowrap;}
+  table.tx td.neg{color:var(--green);}
+  .empty-note{
+    padding:14px 18px;
+    font-size:13px;
+    color:var(--ink-soft);
+  }
+  footer.foot{
+    margin-top:56px;
+    padding-top:20px;
+    border-top:1px solid var(--line);
+    font-size:12px;
+    color:var(--ink-soft);
+  }
+
+  .bugbtn{
+    background:none;
+    border:1px solid var(--line-strong);
+    color:var(--ink-soft);
+    padding:7px 14px;
+    border-radius:4px;
+    font-size:12px;
+    font-weight:500;
+    cursor:pointer;
+    font-family:'IBM Plex Sans',sans-serif;
+  }
+  .bugbtn:hover{border-color:var(--ink);color:var(--ink);}
+
+  .modal-backdrop{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(36,31,26,0.4);
+    align-items:center;
+    justify-content:center;
+    z-index:100;
+    padding:20px;
+  }
+  .modal-backdrop.open{display:flex;}
+  .modal{
+    background:var(--card);
+    border-radius:6px;
+    padding:24px;
+    max-width:440px;
+    width:100%;
+    box-shadow:0 12px 40px rgba(0,0,0,0.2);
+  }
+  .modal h3{margin:0 0 6px;font-size:18px;}
+  .modal-sub{font-size:13px;color:var(--ink-soft);margin:0 0 14px;}
+  .modal textarea, .modal input{
+    width:100%;
+    border:1px solid var(--line-strong);
+    border-radius:4px;
+    padding:10px 12px;
+    font-family:'IBM Plex Sans',sans-serif;
+    font-size:14px;
+    margin-bottom:10px;
+    box-sizing:border-box;
+    resize:vertical;
+  }
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:4px;}
+  .modal-status{font-size:13px;margin-top:10px;min-height:18px;}
+  .modal-status.ok{color:var(--green);}
+  .modal-status.err{color:var(--red);}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="mark">Statement<span>→</span>CSV</div>
+    <div style="display:flex;align-items:center;gap:16px;">
+      <button class="bugbtn" id="bugReportBtn" type="button">Report a bug</button>
+      <div class="count" id="filecount">0 files loaded</div>
+    </div>
+  </header>
+
+  <h1>Turn card statements into clean CSVs</h1>
+  <p class="lede">Drop in one or more Home Depot Pro Xtra PDF statements. Everything happens in this browser tab — nothing is uploaded to a server.</p>
+
+  <div class="dropzone" id="dropzone">
+    <div class="icon"><i>&#8593;</i></div>
+    <div class="title">Drop PDF statements here, or click to browse</div>
+    <div class="sub">You can select more than one at a time</div>
+    <input type="file" id="fileInput" accept="application/pdf" multiple>
+  </div>
+
+  <div class="queue" id="queue"></div>
+
+  <section class="results" id="resultsSection" style="display:none;">
+    <div class="results-head">
+      <h2>Extracted statements</h2>
+      <button class="secondary" id="clearBtn">Clear all</button>
+    </div>
+    <div id="downloadPrompt"></div>
+    <div id="cards"></div>
+  </section>
+
+  <footer class="foot">Parses The Home Depot Pro Xtra commercial account statement layout. If a field can't be found on a given statement, it's left blank in the CSV rather than guessed.</footer>
+</div>
+
+<div class="modal-backdrop" id="bugModalBackdrop">
+  <div class="modal">
+    <h3>Report a bug</h3>
+    <p class="modal-sub">What happened? Include the bank/statement if it's specific to one.</p>
+    <textarea id="bugDescription" rows="5" placeholder="e.g. Uploaded a Chase statement and it found 0 transactions..."></textarea>
+    <input type="email" id="bugEmail" placeholder="Your email (optional, in case we need to follow up)">
+    <div class="modal-actions">
+      <button class="secondary" id="bugCancelBtn" type="button">Cancel</button>
+      <button class="primary" id="bugSubmitBtn" type="button">Send report</button>
+    </div>
+    <div class="modal-status" id="bugStatus"></div>
+  </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const queueEl = document.getElementById('queue');
+const cardsEl = document.getElementById('cards');
+const resultsSection = document.getElementById('resultsSection');
+const filecount = document.getElementById('filecount');
+const downloadPromptEl = document.getElementById('downloadPrompt');
+
+let items = []; // {id, name, status, data, rawText, error}
+let seq = 0;
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag');
+  handleFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+function handleFiles(fileList){
+  const files = Array.from(fileList).filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+  files.forEach(f => {
+    const id = seq++;
+    items.push({id, name: f.name, status:'busy', data:null, rawText:'', error:null});
+    processFile(f, id);
+  });
+  renderQueue();
+}
+
+function extractPageText(items){
+  let text = '';
+  let prev = null;
+  for (const item of items){
+    if (!item.str){ continue; } // skip position-only placeholders without losing the real previous item
+    if (prev && prev.str){
+      const sameLine = Math.abs(item.transform[5] - prev.transform[5]) < 2;
+      if (!sameLine){
+        text += '\n';
+      } else {
+        const prevEndX = prev.transform[4] + (prev.width || 0);
+        const gap = item.transform[4] - prevEndX;
+        const alreadyHasSpace = /\s$/.test(prev.str) || /^\s/.test(item.str);
+        if (!alreadyHasSpace && gap > 1.2) text += ' ';
+      }
+    }
+    text += item.str;
+    prev = item;
+  }
+  return text;
+}
+
+// ============================================================
+// Usage logging / error alerts (optional)
+// Paste your Google Apps Script Web App URL here (see AppsScript_Code.gs
+// for the backend to deploy). Leave blank to disable logging entirely —
+// the app works fine without it, this just feeds the shared usage log.
+// ============================================================
+const LOG_ENDPOINT = 'https://script.google.com/a/macros/housecallpro.com/s/AKfycbxOR1-spsATqgGynT8isyszOdTe6PPBG7bdLjvOQCQ1rJ6x65f9EmHt9W63Qrov4IV4/exec';
+
+function logEvent(payload){
+  if (!LOG_ENDPOINT) return;
+  try {
+    fetch(LOG_ENDPOINT, {
+      method: 'POST',
+      mode: 'no-cors', // Apps Script Web Apps don't return CORS headers; we
+                        // don't need to read the response, just fire it off.
+      headers: { 'Content-Type': 'text/plain' }, // avoids a CORS preflight
+      body: JSON.stringify(payload)
+    }).catch(() => {}); // never let logging failures affect the user
+  } catch (e) { /* ignore */ }
+}
+
+async function processFile(file, id){
+  try {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+    let text = '';
+    for (let p = 1; p <= pdf.numPages; p++){
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+      text += extractPageText(content.items) + '\n\x0C\n';
+    }
+    const item = items.find(i => i.id === id);
+    item.rawText = text;
+    item.data = parseStatement(text);
+    item.status = 'ok';
+    const issuer = detectIssuer(text.replace(/\s+/g,' '));
+    const txCount = item.data.transactions.length;
+    logEvent({
+      eventType: 'conversion',
+      issuer, fileName: file.name,
+      transactionCount: txCount,
+      status: txCount > 0 ? 'success' : 'zero_transactions',
+      message: txCount > 0 ? '' : 'Parsed with 0 transactions found — check statement format'
+    });
+  } catch(err){
+    const item = items.find(i => i.id === id);
+    item.status = 'err';
+    item.error = 'Could not read this PDF';
+    logEvent({
+      eventType: 'error',
+      fileName: file.name,
+      status: 'error',
+      message: (err && err.message) ? err.message : String(err)
+    });
+  }
+  renderQueue();
+  renderResults();
+}
+
+function num(s){
+  if (s === undefined || s === null) return '';
+  return s.replace(/,/g,'').trim();
+}
+
+function findField(text, patterns){
+  for (const re of patterns){
+    const m = text.match(re);
+    if (m) return num(m[1]);
+  }
+  return '';
+}
+
+function parseMDY(str){
+  if (!str) return null;
+  const m = str.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (!m) return null;
+  let year = parseInt(m[3], 10);
+  if (year < 100) year += 2000;
+  return { month: parseInt(m[1], 10), day: parseInt(m[2], 10), year };
+}
+
+function resolveTransactionYear(txMonth, anchor){
+  if (!anchor) return '';
+  let year = anchor.year;
+  if (txMonth > anchor.month) year -= 1;
+  return year;
+}
+
+function normalizeShortDate(dateStr){
+  if (!dateStr) return '';
+  const parts = dateStr.split('/');
+  if (parts.length !== 3) return dateStr;
+  let year = parseInt(parts[2], 10);
+  if (year < 100) year += 2000;
+  return parts[0] + '/' + parts[1] + '/' + year;
+}
+
+function detectIssuer(clean){
+  // Use specific product/letterhead phrases rather than bare company names, since a
+  // statement can mention another bank as an ACH counterparty (e.g. a Chase checking
+  // statement listing "Orig CO Name: American Express" as a payee) without being
+  // issued by that bank.
+  if (/JPMorgan\s*Chase\s*Bank/i.test(clean)) return 'chase';
+  if (/U\.?S\.?\s*Bank\s*(Business\s*Platinum|National\s*Association)/i.test(clean)) return 'usbank';
+  if (/Amazon\s*Business\s*Prime\s*Card/i.test(clean) || /American\s*Express.{0,60}Cardmember\s*Service/i.test(clean)) return 'amex';
+  if (/Pro\s*Xtra\s*Credit\s*Card/i.test(clean) || /Home\s*Depot\s*Credit\s*Services/i.test(clean)) return 'homedepot';
+  if (/Truist/i.test(clean)) return 'truist';
+  if (/Woodforest\s*National\s*Bank/i.test(clean)) return 'woodforest';
+  if (/Navy\s*Federal\s*Credit\s*Union/i.test(clean)) return 'nfcu';
+  return 'unknown';
+}
+
+const US_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC','PR']);
+
+// Most statement lines read as "MERCHANT NAME CITY ST". Split off a trailing
+// city/state pair (if present) into Description, leaving the merchant name as Vendor.
+// Some statement PDFs (seen so far in Home Depot and Amazon Business/Amex layouts)
+// don't encode a space glyph between certain words, so recurring boilerplate comes
+// through glued together (e.g. "THEHOMEDEPOT"). This is a light, growable list of
+// known phrases to re-space — not a substitute for the general splitter above.
+const GLUED_PHRASE_FIXES = [
+  [/THEHOMEDEPOT/gi, 'THE HOME DEPOT '],
+  [/ONLINEPAYMENT/gi, 'ONLINE PAYMENT '],
+  [/AUTOPAYPAYMENT/gi, 'AUTOPAY PAYMENT '],
+  [/AMAZONMARKETPLACE/gi, 'AMAZON MARKETPLACE '],
+  [/LATEPAYMENTFEE/gi, 'LATE PAYMENT FEE'],
+  [/FINANCECHARGE/gi, 'FINANCE CHARGE'],
+  [/INTERESTCHARGEONPURCHASES/gi, 'INTEREST CHARGE ON PURCHASES'],
+  [/THANKYOU/gi, 'THANK YOU'],
+];
+
+function fixGluedPhrases(text){
+  let out = text;
+  for (const [pattern, replacement] of GLUED_PHRASE_FIXES){
+    out = out.replace(pattern, replacement);
+  }
+  return out.replace(/\s+/g, ' ').trim();
+}
+
+// Common filler words that precede a trailing state code but aren't place names
+// (e.g. "...THANK YOU IL" is not "city THANK YOU, state IL").
+const NON_CITY_WORDS = new Set(['YOU','THE','TO','FOR','AND','ON','IN','AT','OF','A','PAY','THANK','PAYMENT']);
+
+function splitVendorDescription(text){
+  const fixed = fixGluedPhrases(text.trim());
+  const tokens = fixed.split(/\s+/);
+  if (tokens.length < 2) return { vendor: fixed, description: '' };
+  const last = tokens[tokens.length - 1].replace(/[^A-Z]/g, '');
+  if (US_STATES.has(last)) {
+    const second = tokens.length >= 3 ? tokens[tokens.length - 2] : '';
+    const looksLikeCity = /^[A-Z][A-Za-z.]*$/.test(second) && !/\d/.test(second) && !NON_CITY_WORDS.has(second.toUpperCase());
+    const splitAt = looksLikeCity ? tokens.length - 2 : tokens.length - 1;
+    if (splitAt > 0) {
+      return {
+        vendor: tokens.slice(0, splitAt).join(' '),
+        description: tokens.slice(splitAt).join(' ')
+      };
+    }
+  }
+  // Some layouts glue the city and state together with no space at all (e.g. "NAMPAID").
+  // If the trailing letters of the last token form a valid state code and what's left
+  // looks like a plain word, split there instead.
+  const lastRaw = tokens[tokens.length - 1];
+  if (lastRaw.length > 2 && /^[A-Za-z]+$/.test(lastRaw)) {
+    const suffix = lastRaw.slice(-2).toUpperCase();
+    const cityPart = lastRaw.slice(0, -2);
+    if (US_STATES.has(suffix) && cityPart.length >= 3 && !NON_CITY_WORDS.has(cityPart.toUpperCase())) {
+      return {
+        vendor: tokens.slice(0, -1).join(' '),
+        description: cityPart + ' ' + suffix
+      };
+    }
+  }
+  return { vendor: fixed, description: '' };
+}
+
+// Generic exclusion keywords: summary/balance boxes tend to use this vocabulary
+// across most issuers, even when the exact label wording differs.
+const SUMMARY_KEYWORDS = /\b(previous balance|new balance|total balance|current balance|current due|past due|minimum payment|credit limit|available credit|available cash|cash advance limit|annual percentage|apr|daily periodic|finance charge summary|balance subject|year to date|life to date|days in billing|billing period|closing date|due date|payments\/credits|new standard|payment terms charges|total payments|total fees|total interest|total new charges|account summary|rewards points|total available)\b/i;
+
+function parseGenericStatement(clean){
+  const accountNumber = findField(clean, [/Account\s*(?:Number|Ending):?\s*([\d -]{4,25}\d)/i]);
+  const dueDateRaw = findField(clean, [/(?:Payment\s*)?Due\s*Date:?\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i]);
+  const closingRaw = findField(clean, [/Closing\s*Date:?\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i, /Statement\s*Date:?\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i]);
+  const minPayment = findField(clean, [/Minimum\s*Payment\s*Due:?\s*\$?\s*([\d,]+\.\d{2})/i]);
+  const newBalance = findField(clean, [/(?:New|Total|Current)\s*Balance:?\s*\$?\s*([\d,]+\.\d{2})/i]);
+  const yearAnchor = parseMDY(closingRaw) || parseMDY(dueDateRaw);
+
+  // Date + description + optional reference + amount, tolerating either credit-sign
+  // convention (leading "-$" or trailing "-").
+  const txRegex = /(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\*?\s+([A-Z][A-Za-z0-9 .,&'#\/-]{0,60}?)\s+(?:([A-Z0-9]{6,20})\s+)?(-)?\$\s*([\d,]+\.\d{2})(-)?(?=\s|$)/g;
+  const transactions = [];
+  let m;
+  while ((m = txRegex.exec(clean)) !== null){
+    const descRaw = m[2].replace(/\s+/g,' ').trim();
+    if (SUMMARY_KEYWORDS.test(descRaw) || /\d{1,2}\/\d{1,2}/.test(descRaw)) continue;
+    const hasYear = /\/\d{2,4}$/.test(m[1]) && m[1].split('/').length === 3;
+    let fullDate = m[1];
+    if (!hasYear) {
+      const txMonth = parseInt(m[1].split('/')[0], 10);
+      const year = resolveTransactionYear(txMonth, yearAnchor);
+      fullDate = year ? (m[1] + '/' + year) : m[1];
+    } else {
+      fullDate = normalizeShortDate(m[1]);
+    }
+    const { vendor, description } = splitVendorDescription(descRaw);
+    const negative = !!m[4] || !!m[6];
+    transactions.push({
+      date: fullDate,
+      vendor, description,
+      amount: (negative ? '-' : '') + num(m[5])
+    });
+  }
+
+  return {
+    accountNumber, accountName: '',
+    previousBalance:'', payments:'', credits:'', purchases:'', debits:'',
+    financeCharges:'', lateFees:'', newBalance,
+    currentDue:'', pastDue:'', minPayment, dueDate: normalizeShortDate(dueDateRaw),
+    creditLimit:'', creditAvailable:'', closingDate: normalizeShortDate(closingRaw), nextClosingDate:'', daysInPeriod:'',
+    apr:'', balanceSubject:'', ytd:'', ltd:'',
+    transactions
+  };
+}
+
+const MONTH_NUMS = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12};
+
+function parseChaseStatement(clean){
+  const accountNumber = findField(clean, [/Account\s*Number:?\s*(\d{6,20})/i]);
+
+  // Statement period end date anchors the year for MM/DD-only transaction dates.
+  const periodMatch = clean.match(/through\s+([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})/i);
+  let yearAnchor = null;
+  if (periodMatch) {
+    const monthNum = MONTH_NUMS[periodMatch[1].slice(0,4).toLowerCase()] || MONTH_NUMS[periodMatch[1].slice(0,3).toLowerCase()];
+    if (monthNum) yearAnchor = { month: monthNum, year: parseInt(periodMatch[3], 10) };
+  }
+
+  const newBalance = findField(clean, [/Ending\s*Balance\s+\d+\s*\$?\s*([\d,]+\.\d{2})/i, /Ending\s*Balance\s*\$?\s*([\d,]+\.\d{2})/i]);
+
+  // Chase checking statements group transactions into sections (Deposits, ATM & Debit
+  // Card, Electronic Withdrawals) with no per-row +/- marker at all — the sign is
+  // implied entirely by which section a row belongs to. The "Checking Summary" box
+  // gives a reliable instance count per section, and transactions appear in the same
+  // order as those sections, so we use the counts as boundaries for a single ordered pass.
+  const depositsCount = parseInt(findField(clean, [/Deposits\s*and\s*Additions\s+(\d+)/i]) || '0', 10);
+  const atmCount = parseInt(findField(clean, [/ATM\s*&\s*Debit\s*Card\s*Withdrawals\s+(\d+)/i]) || '0', 10);
+  const electronicCount = parseInt(findField(clean, [/Electronic\s*Withdrawals\s+(\d+)/i]) || '0', 10);
+
+  const txRegex = /(\d{2}\/\d{2})\s+([A-Za-z][A-Za-z0-9 .,:&'#*\/-]{0,250}?)\s*\$?\s*([\d,]+\.\d{2})(?=\s|$)/g;
+  const transactions = [];
+  let m;
+  let idx = 0;
+  while ((m = txRegex.exec(clean)) !== null){
+    const desc = m[2].replace(/\s+/g,' ').trim();
+    if (SUMMARY_KEYWORDS.test(desc)) continue;
+    idx++;
+    // Positive for deposits (first N rows), negative for ATM/debit and electronic
+    // withdrawals (all rows after that), based on the counts above.
+    const negative = idx > depositsCount;
+    const txMonth = parseInt(m[1].split('/')[0], 10);
+    const year = resolveTransactionYear(txMonth, yearAnchor);
+    const fullDate = year ? (m[1] + '/' + year) : m[1];
+    const { vendor, description } = splitVendorDescription(desc);
+    transactions.push({
+      date: fullDate,
+      vendor, description,
+      amount: (negative ? '-' : '') + num(m[3])
+    });
+  }
+
+  return {
+    accountNumber, accountName: '',
+    previousBalance:'', payments:'', credits:'', purchases:'', debits:'',
+    financeCharges:'', lateFees:'', newBalance,
+    currentDue:'', pastDue:'', minPayment:'', dueDate:'',
+    creditLimit:'', creditAvailable:'', closingDate:'', nextClosingDate:'', daysInPeriod:'',
+    apr:'', balanceSubject:'', ytd:'', ltd:'',
+    transactions
+  };
+}
+
+function parseUSBankStatement(clean){
+  const accountNumber = findField(clean, [/Account:?\s*([\d ]{10,25}\d)/i]);
+  const closingRaw = findField(clean, [/Closing\s*Date:?\s*(\d{1,2}\/\d{1,2}\/\d{4})/i]);
+  const dueDate = findField(clean, [/Payment\s*Due\s*Date\s*(\d{1,2}\/\d{1,2}\/\d{4})/i]);
+  const minPayment = findField(clean, [/Minimum\s*Payment\s*Due\s*\$?\s*([\d,]+\.\d{2})/i]);
+  const newBalance = findField(clean, [/New\s*Balance\s*=?\s*\$?\s*([\d,]+\.\d{2})/i]);
+
+  // Columns: Post Date, Trans Date, Ref #, Description, Amount. We use Trans Date
+  // (when the transaction actually happened) rather than Post Date.
+  const txRegex = /(\d{2}\/\d{2})\s+(\d{2}\/\d{2})\s+([A-Z0-9]{2,8})\s+([A-Za-z][A-Za-z0-9 .,&'#\/-]{0,120}?)\s*\$?\s*([\d,]+\.\d{2})/g;
+  const transactions = [];
+  let m;
+  while ((m = txRegex.exec(clean)) !== null){
+    const desc = m[4].replace(/\s+/g,' ').trim();
+    // U.S. Bank marks credits with a "CR" notation printed in a separate column that
+    // doesn't reliably stay adjacent to the amount in extracted text, so we can't read
+    // it directly. As a fallback, common payment/credit wording is treated as negative.
+    const negative = /payment|credit|refund/i.test(desc);
+    const { vendor, description } = splitVendorDescription(desc);
+    transactions.push({
+      date: normalizeShortDate(m[2]),
+      vendor, description,
+      amount: (negative ? '-' : '') + num(m[5])
+    });
+  }
+
+  return {
+    accountNumber, accountName: '',
+    previousBalance:'', payments:'', credits:'', purchases:'', debits:'',
+    financeCharges:'', lateFees:'', newBalance,
+    currentDue:'', pastDue:'', minPayment, dueDate,
+    creditLimit:'', creditAvailable:'', closingDate: closingRaw, nextClosingDate:'', daysInPeriod:'',
+    apr:'', balanceSubject:'', ytd:'', ltd:'',
+    transactions
+  };
+}
+
+function escapeRegex(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+// Truist's consolidated statements label each account's withdrawal/deposit blocks with
+// section headers that (unlike Chase) stay in correct document order, so we can slice
+// the raw text by section rather than relying on instance counts. A page break can
+// interrupt a section with a repeated "(continued)" column header; slicing still works
+// since that repeated header doesn't match the transaction pattern below.
+function extractTruistSections(rawText, sectionName){
+  const startRe = new RegExp(escapeRegex(sectionName) + '\\s*\\n\\s*DATE\\s*DESCRIPTION\\s*AMOUNT', 'gi');
+  const sections = [];
+  let m;
+  while ((m = startRe.exec(rawText)) !== null) {
+    const contentStart = m.index + m[0].length;
+    const totalRe = new RegExp('Total\\s*' + escapeRegex(sectionName), 'i');
+    const restText = rawText.slice(contentStart);
+    const totalMatch = restText.match(totalRe);
+    const contentEnd = totalMatch ? contentStart + totalMatch.index : rawText.length;
+    sections.push(rawText.slice(contentStart, contentEnd));
+  }
+  return sections;
+}
+
+function parseTruistStatement(rawText){
+  const clean = rawText.replace(/\s+/g,' ');
+  const accountNumber = findField(clean, [/TRUIST\s*SIMPLE\s*BUSINESS\s*(?:CHECKING|SAVINGS)\s+(\d{8,15})/i]);
+  const periodMatch = clean.match(/For\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
+  const yearAnchor = periodMatch ? { month: parseInt(periodMatch[1],10), year: parseInt(periodMatch[3],10) } : null;
+  const newBalance = findField(clean, [/Total\s*checking\s*and\s*money\s*market\s*savings\s*accounts\s*\$?\s*([\d,]+\.\d{2})/i]);
+
+  const txRegex = /(\d{2}\/\d{2})\s+([A-Za-z][A-Za-z0-9 .,:&'#*\/()$-]{0,150}?)\s*\$?\s*([\d,]+\.\d{2})(?=\s|$)/g;
+  function extractTx(section, negative){
+    const sectionClean = section.replace(/\s+/g,' ');
+    const out = [];
+    let m;
+    const re = new RegExp(txRegex.source, 'g');
+    while ((m = re.exec(sectionClean)) !== null){
+      const desc = m[2].trim();
+      if (SUMMARY_KEYWORDS.test(desc)) continue;
+      const txMonth = parseInt(m[1].split('/')[0], 10);
+      const year = resolveTransactionYear(txMonth, yearAnchor);
+      const fullDate = year ? (m[1] + '/' + year) : m[1];
+      const { vendor, description } = splitVendorDescription(desc);
+      out.push({ date: fullDate, vendor, description, amount: (negative ? '-' : '') + num(m[3]) });
+    }
+    return out;
+  }
+
+  const transactions = [];
+  extractTruistSections(rawText, 'Other withdrawals, debits and service charges').forEach(s => transactions.push(...extractTx(s, true)));
+  extractTruistSections(rawText, 'Checks').forEach(s => transactions.push(...extractTx(s, true)));
+  extractTruistSections(rawText, 'Deposits, credits and interest').forEach(s => transactions.push(...extractTx(s, false)));
+
+  return {
+    accountNumber, accountName: '',
+    previousBalance:'', payments:'', credits:'', purchases:'', debits:'',
+    financeCharges:'', lateFees:'', newBalance,
+    currentDue:'', pastDue:'', minPayment:'', dueDate:'',
+    creditLimit:'', creditAvailable:'', closingDate:'', nextClosingDate:'', daysInPeriod:'',
+    apr:'', balanceSubject:'', ytd:'', ltd:'',
+    transactions
+  };
+}
+
+// Woodforest lists only a transaction amount and the running balance after it (no
+// explicit +/- marker), with Credits and Debits as separate table columns that
+// collapse into the same two-number shape once extracted as text. We recover the
+// sign by tracking the running balance: if it went up by the transaction amount,
+// it's a credit; if down, a debit.
+function parseWoodforestStatement(rawText){
+  const clean = rawText.replace(/\s+/g,' ');
+  const accountNumber = findField(clean, [/Checking\s+(\d{6,15})/i]);
+  const balanceForwardMatch = clean.match(/Checking\s+\d+\s+(-?[\d,]+\.\d{2})/i);
+  const periodMatch = clean.match(/Statement\s*Period:?\s*[A-Za-z]+\s+\d{1,2}\s*-\s*[A-Za-z]+\s+(\d{1,2}),\s*(\d{4})/i);
+  const yearAnchor = periodMatch ? { month: 12, year: parseInt(periodMatch[2],10) } : null; // refined below via month name
+  const monthMatch = clean.match(/Statement\s*Period:?\s*[A-Za-z]+\s+\d{1,2}\s*-\s*([A-Za-z]+)\s+\d{1,2},\s*(\d{4})/i);
+  if (monthMatch){
+    const mn = MONTH_NUMS[monthMatch[1].slice(0,3).toLowerCase()];
+    if (mn && yearAnchor) yearAnchor.month = mn;
+  }
+  const newBalance = findField(clean, [/Checking\s+\d+\s+-?[\d,]+\.\d{2}\s+[\d,]+\.\d{2}\s+[\d,]+\.\d{2}\s+(-?[\d,]+\.\d{2})/i]);
+
+  let runningBalance = balanceForwardMatch ? parseFloat(balanceForwardMatch[1].replace(/,/g,'')) : null;
+  const lineRe = /^(\d{2}-\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+(.+)$/gm;
+  const transactions = [];
+  let m;
+  while ((m = lineRe.exec(rawText)) !== null){
+    if (runningBalance === null) continue;
+    const amount = parseFloat(m[2].replace(/,/g,''));
+    const balanceAfter = parseFloat(m[3].replace(/,/g,''));
+    const delta = balanceAfter - runningBalance;
+    const negative = Math.abs(delta - amount) < 0.02 ? false : true;
+    runningBalance = balanceAfter;
+    const desc = m[4].trim();
+    const txMonth = parseInt(m[1].split('-')[0], 10);
+    const year = resolveTransactionYear(txMonth, yearAnchor);
+    const fullDate = year ? (m[1].replace('-','/') + '/' + year) : m[1].replace('-','/');
+    const { vendor, description } = splitVendorDescription(desc);
+    transactions.push({ date: fullDate, vendor, description, amount: (negative ? '-' : '') + num(m[2]) });
+  }
+
+  return {
+    accountNumber, accountName: '',
+    previousBalance:'', payments:'', credits:'', purchases:'', debits:'',
+    financeCharges:'', lateFees:'', newBalance,
+    currentDue:'', pastDue:'', minPayment:'', dueDate:'',
+    creditLimit:'', creditAvailable:'', closingDate:'', nextClosingDate:'', daysInPeriod:'',
+    apr:'', balanceSubject:'', ytd:'', ltd:'',
+    transactions
+  };
+}
+
+// Navy Federal's consolidated statements render each account's transaction
+// descriptions and its amount/balance columns as two separate blocks per page
+// (not interleaved per row), so we zip them back together in document order. The
+// "Items Paid" table is a duplicate reconciliation summary in a different layout
+// and is stripped first so it doesn't throw off that pairing. Trailing "-" signs on
+// the balance figures are unreliable here (another column-extraction artifact), so
+// sign is inferred the same way as Woodforest: via the balance delta.
+function parseNFCUStatement(rawText){
+  const clean = rawText.replace(/\s+/g,' ');
+  const accountNumber = findField(clean, [/Business\s*Checking\s*-\s*(\d{6,15})/i]) || findField(clean, [/Access\s*No\.?\s*(\d+)/i]);
+  const periodMatch = clean.match(/Statement\s*Period\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s*-\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})/i);
+  let yr = periodMatch ? parseInt(periodMatch[6],10) : null;
+  if (yr !== null && yr < 100) yr += 2000;
+  const yearAnchor = periodMatch ? { month: parseInt(periodMatch[4],10), year: yr } : null;
+
+  const stripped = rawText.replace(/Items Paid[\s\S]*?(?=Business Checking -|Mbr Business Savings -|\x0C|$)/g, '');
+  const pages = stripped.split('\x0C');
+
+  const transactions = [];
+  let runningBalance = null;
+
+  for (const page of pages){
+    const headerMatch = page.match(/Amount\(\$\)\s*Balance\(\$\)/);
+    if (!headerMatch) continue;
+    const descBlockRaw = page.slice(0, headerMatch.index);
+    const amountBlockRaw = page.slice(headerMatch.index + headerMatch[0].length);
+
+    const descLines = descBlockRaw.split('\n').map(l => l.trim()).filter(Boolean);
+    const entries = [];
+    for (const line of descLines){
+      const dm = line.match(/^(\d{2}-\d{2})\s+(.*)$/);
+      if (dm) entries.push({ date: dm[1], text: dm[2] });
+      else if (entries.length && !/^Date\s/.test(line) && !/^Business\s/.test(line) && !/^(Checking|Savings)$/.test(line)) {
+        entries[entries.length - 1].text += ' ' + line;
+      }
+    }
+
+    const amtLines = amountBlockRaw.split('\n').map(l => l.trim()).filter(Boolean);
+    const amounts = [];
+    const pairRe = /^([\d,]+\.\d{2})(-)?(?:\s+([\d,]+\.\d{2})(-)?)?$/;
+    for (const line of amtLines){
+      const am = line.match(pairRe);
+      if (am) amounts.push({
+        a: parseFloat(am[1].replace(/,/g,'')), aNeg: !!am[2],
+        b: am[3] !== undefined ? parseFloat(am[3].replace(/,/g,'')) : null
+      });
+    }
+
+    let ai = 0;
+    for (const entry of entries){
+      if (/Ending Balance/i.test(entry.text)) continue;
+      if (/Beginning Balance/i.test(entry.text)){
+        const amt = amounts[ai++];
+        if (amt) runningBalance = amt.aNeg ? -amt.a : amt.a;
+        continue;
+      }
+      const amt = amounts[ai++];
+      if (!amt || amt.b === null || runningBalance === null) continue;
+      const candidatePos = runningBalance + amt.a;
+      const candidateNeg = runningBalance - amt.a;
+      let negative, newBalance;
+      if (Math.abs(Math.abs(candidatePos) - amt.b) < 0.02) { negative = false; newBalance = candidatePos; }
+      else if (Math.abs(Math.abs(candidateNeg) - amt.b) < 0.02) { negative = true; newBalance = candidateNeg; }
+      else { negative = false; newBalance = amt.b; }
+      runningBalance = newBalance;
+
+      const txMonth = parseInt(entry.date.split('-')[0], 10);
+      const year = resolveTransactionYear(txMonth, yearAnchor);
+      const fullDate = year ? (entry.date.replace('-','/') + '/' + year) : entry.date.replace('-','/');
+      const { vendor, description } = splitVendorDescription(entry.text.trim());
+      transactions.push({ date: fullDate, vendor, description, amount: (negative ? '-' : '') + num(String(amt.a)) });
+    }
+  }
+
+  return {
+    accountNumber, accountName: '',
+    previousBalance:'', payments:'', credits:'', purchases:'', debits:'',
+    financeCharges:'', lateFees:'', newBalance:'',
+    currentDue:'', pastDue:'', minPayment:'', dueDate:'',
+    creditLimit:'', creditAvailable:'', closingDate:'', nextClosingDate:'', daysInPeriod:'',
+    apr:'', balanceSubject:'', ytd:'', ltd:'',
+    transactions
+  };
+}
+
+function parseStatement(text){
+  const clean = text.replace(/\s+/g,' ');
+  const issuer = detectIssuer(clean);
+  if (issuer === 'amex') return parseAmexStatement(clean);
+  if (issuer === 'homedepot') return parseHomeDepotStatement(clean);
+  if (issuer === 'chase') return parseChaseStatement(clean);
+  if (issuer === 'usbank') return parseUSBankStatement(clean);
+  if (issuer === 'truist') return parseTruistStatement(text);
+  if (issuer === 'woodforest') return parseWoodforestStatement(text);
+  if (issuer === 'nfcu') return parseNFCUStatement(text);
+  return parseGenericStatement(clean);
+}
+
+function parseAmexStatement(clean){
+  const accountNumber = findField(clean, [/Account\s*Ending\s*([\d-]+)/i]);
+  const dueDate = normalizeShortDate(findField(clean, [/Payment\s*Due\s*Date\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i]));
+  const minPayment = findField(clean, [/Minimum\s*Payment\s*Due\s*\$?\s*([\d,]+\.\d{2})/i]);
+  const newBalance = findField(clean, [/Total\s*Balance\s*\$?\s*([\d,]+\.\d{2})/i]);
+
+  // Amex/Amazon Business rows already carry a full MM/DD/YY date. Credits show as a
+  // leading "-$" rather than a trailing "-" like the Home Depot layout.
+  const txRegex = /(\d{2}\/\d{2}\/\d{2})\*?\s+([A-Za-z][A-Za-z0-9 .,&'\/-]{0,60}?)\s*(-?)\$\s*([\d,]+\.\d{2})/g;
+  const transactions = [];
+  let m;
+  while ((m = txRegex.exec(clean)) !== null){
+    const descRaw = m[2].replace(/\s+/g,' ').trim();
+    if (/\d{1,2}\/\d{1,2}/.test(descRaw)) continue;
+    const { vendor, description } = splitVendorDescription(descRaw);
+    transactions.push({
+      date: normalizeShortDate(m[1]),
+      vendor, description,
+      amount: (m[3] === '-' ? '-' : '') + num(m[4])
+    });
+  }
+
+  return {
+    accountNumber, accountName: '',
+    previousBalance:'', payments:'', credits:'', purchases:'', debits:'',
+    financeCharges:'', lateFees:'', newBalance,
+    currentDue:'', pastDue:'', minPayment, dueDate,
+    creditLimit:'', creditAvailable:'', closingDate:'', nextClosingDate:'', daysInPeriod:'',
+    apr:'', balanceSubject:'', ytd:'', ltd:'',
+    transactions
+  };
+}
+
+function parseHomeDepotStatement(clean){
+
+  const accountNumber = findField(clean, [/Account\s*Number:?\s*([\d ]{6,25}\d)/i]);
+  const accountName = findField(clean, [/Customer\s*Service:\s*([A-Z0-9][A-Z0-9 &.,'-]*?)\s*homedepot/i]);
+
+  const previousBalance = findField(clean, [/Previous\s*Balance\s*\$?\s*([\d,]+\.\d{2})/i]);
+  const payments = findField(clean, [/\bPayments\s*-?\$?\s*([\d,]+\.\d{2})/i]);
+  const credits = findField(clean, [/\bCredits\s*-?\$?\s*([\d,]+\.\d{2})/i]);
+  const purchases = findField(clean, [/\bPurchases\s*\+?\$?\s*([\d,]+\.\d{2})/i]);
+  const debits = findField(clean, [/\bDebits\s*\+?\$?\s*([\d,]+\.\d{2})/i]);
+  const financeCharges = findField(clean, [/FINANCE\s*CHARGES\s*\+?\$?\s*([\d,]+\.\d{2})/i]);
+  const lateFees = findField(clean, [/Late\s*Fees\s*\+?\$?\s*([\d,]+\.\d{2})/i]);
+  const newBalance = findField(clean, [/New\s*Balance\s*\$?\s*([\d,]+\.\d{2})/i]);
+
+  const currentDue = findField(clean, [/Current\s*Due\s*\$?\s*([\d,]+\.\d{2})/i]);
+  const pastDue = findField(clean, [/Past\s*Due\s*Amount\s*\+?\$?\s*([\d,]+\.\d{2})/i]);
+  const minPayment = findField(clean, [/Minimum\s*Payment\s*Due\s*=?\$?\s*([\d,]+\.\d{2})/i]);
+  const dueDate = findField(clean, [/Payment\s*Due\s*Date\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i]);
+  const creditLimit = findField(clean, [/Credit\s*Limit\s*\$?\s*([\d,]+)/i]);
+  const creditAvailable = findField(clean, [/Credit\s*Available\s*\$?\s*([\d,]+)/i]);
+  let closingDate = '', nextClosingDate = '';
+  for (const cm of clean.matchAll(/(Next\s*)?Closing\s*Date\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/gi)){
+    if (cm[1]) { if (!nextClosingDate) nextClosingDate = cm[2]; }
+    else if (!closingDate) closingDate = cm[2];
+  }
+  const daysInPeriod = findField(clean, [/Days\s*in\s*Billing\s*Period\s*(\d+)/i]);
+
+  const financeSummary = clean.match(/REGULAR\s*REVOLVING\s*CREDIT\s*PLAN\s*([\d.]+%)\s*([\d.]+%)\s*\$?([\d,]+\.\d{2})\s*\$?([\d,]+\.\d{2})/i);
+  const apr = financeSummary ? financeSummary[1] : '';
+  const balanceSubject = financeSummary ? num(financeSummary[3]) : '';
+
+  const ytd = findField(clean, [/Year\s*to\s*Date\s*\$?\s*([\d,]+\.\d{2})/i]);
+  const ltd = findField(clean, [/Life\s*to\s*Date\s*\$?\s*([\d,]+\.\d{2})/i]);
+
+  const yearAnchor = parseMDY(closingDate) || parseMDY(nextClosingDate) || parseMDY(dueDate);
+
+  // Transactions: date, description, optional reference #, amount, optional trailing "-" for credit
+  const txRegex = /(\d{2}\/\d{2})\s+([A-Z][A-Z0-9 .'#/-]{0,60}?)\s+(?:([A-Z0-9]{6,20})\s+)?\$?\s*([\d,]+\.\d{2})\s*(-)?(?=\s|$)/g;
+  const transactions = [];
+  let m;
+  while ((m = txRegex.exec(clean)) !== null){
+    const desc = m[2].trim();
+    if (/\d{1,2}\/\d{1,2}/.test(desc)) continue;
+    const txMonth = parseInt(m[1].split('/')[0], 10);
+    const year = resolveTransactionYear(txMonth, yearAnchor);
+    const fullDate = year ? (m[1] + '/' + year) : m[1];
+    const { vendor, description } = splitVendorDescription(desc);
+    transactions.push({
+      date: fullDate,
+      vendor, description,
+      amount: (m[5] === '-' ? '-' : '') + num(m[4])
+    });
+  }
+
+  return {
+    accountNumber, accountName,
+    previousBalance, payments, credits, purchases, debits,
+    financeCharges, lateFees, newBalance,
+    currentDue, pastDue, minPayment, dueDate,
+    creditLimit, creditAvailable, closingDate, nextClosingDate, daysInPeriod,
+    apr, balanceSubject, ytd, ltd,
+    transactions
+  };
+}
+
+function renderQueue(){
+  filecount.textContent = items.length + (items.length === 1 ? ' file loaded' : ' files loaded');
+  queueEl.innerHTML = items.map(it => {
+    const statusText = it.status === 'busy' ? 'Reading…' : it.status === 'ok' ? (it.data.transactions.length + ' transactions found') : it.error;
+    return `<div class="row ${it.status}">
+      <div class="dot"></div>
+      <div class="name">${escapeHtml(it.name)}</div>
+      <div class="status">${escapeHtml(statusText)}</div>
+      <button class="remove" data-id="${it.id}" aria-label="Remove">&times;</button>
+    </div>`;
+  }).join('');
+  queueEl.querySelectorAll('.remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      items = items.filter(i => i.id !== Number(btn.dataset.id));
+      renderQueue();
+      renderResults();
+    });
+  });
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function money(v){
+  if (v === '' || v === undefined) return '—';
+  const n = parseFloat(v);
+  if (isNaN(n)) return v;
+  return (n < 0 ? '-$' : '$') + Math.abs(n).toFixed(2);
+}
+
+function renderResults(){
+  const ok = items.filter(i => i.status === 'ok');
+  resultsSection.style.display = ok.length ? 'block' : 'none';
+  if (!ok.length) { cardsEl.innerHTML = ''; downloadPromptEl.innerHTML = ''; return; }
+
+  if (ok.length === 1) {
+    downloadPromptEl.innerHTML = `<div class="actions" style="margin-bottom:20px;">
+      <button class="primary" id="downloadSingleBtn">Download CSV</button>
+    </div>`;
+    document.getElementById('downloadSingleBtn').addEventListener('click', downloadCombined);
+  } else {
+    downloadPromptEl.innerHTML = `<div class="prompt-card">
+      <div class="q">You've got <span class="n">${ok.length}</span> statements ready. How do you want the CSVs?</div>
+      <div class="choices">
+        <button class="secondary" id="downloadZipBtn">Separate CSV per statement (.zip)</button>
+        <button class="primary" id="downloadBtn">One combined CSV</button>
+      </div>
+    </div>`;
+    document.getElementById('downloadBtn').addEventListener('click', downloadCombined);
+    document.getElementById('downloadZipBtn').addEventListener('click', downloadZip);
+  }
+
+  cardsEl.innerHTML = ok.map(it => {
+    const d = it.data;
+    const txRows = d.transactions.length
+      ? d.transactions.map(t => `<tr>
+          <td>${escapeHtml(t.date)}</td>
+          <td>${escapeHtml(t.vendor)}</td>
+          <td>${escapeHtml(t.description)}</td>
+          <td class="amt ${t.amount.startsWith('-') ? 'neg' : ''}">${money(t.amount)}</td>
+        </tr>`).join('')
+      : '';
+    return `<div class="accountcard">
+      <div class="head">
+        <div class="file">${escapeHtml(it.name)}</div>
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div class="bal">New balance ${money(d.newBalance)}</div>
+          <button class="secondary rawtext" data-id="${it.id}" style="padding:6px 12px;font-size:12px;">Raw text</button>
+        </div>
+      </div>
+      <div class="grid3">
+        <div class="stat"><div class="label">Account</div><div class="value">${escapeHtml(d.accountNumber || '—')}</div></div>
+        <div class="stat"><div class="label">Payment due</div><div class="value">${escapeHtml(d.dueDate || '—')}</div></div>
+        <div class="stat"><div class="label">Minimum due</div><div class="value">${money(d.minPayment)}</div></div>
+      </div>
+      ${txRows
+        ? `<table class="tx"><thead><tr><th>Date</th><th>Vendor</th><th>Description</th><th style="text-align:right;">Amount</th></tr></thead><tbody>${txRows}</tbody></table>`
+        : `<div class="empty-note">No line-item transactions detected on this statement.</div>`}
+    </div>`;
+  }).join('');
+
+  cardsEl.querySelectorAll('.rawtext').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const it = items.find(i => i.id === Number(btn.dataset.id));
+      const blob = new Blob([it.rawText], {type:'text/plain'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = it.name.replace(/\.pdf$/i,'') + '_raw.txt';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  });
+}
+
+const bugModalBackdrop = document.getElementById('bugModalBackdrop');
+const bugStatusEl = document.getElementById('bugStatus');
+
+document.getElementById('bugReportBtn').addEventListener('click', () => {
+  bugStatusEl.textContent = '';
+  bugStatusEl.className = 'modal-status';
+  bugModalBackdrop.classList.add('open');
+});
+document.getElementById('bugCancelBtn').addEventListener('click', () => {
+  bugModalBackdrop.classList.remove('open');
+});
+bugModalBackdrop.addEventListener('click', (e) => {
+  if (e.target === bugModalBackdrop) bugModalBackdrop.classList.remove('open');
+});
+document.getElementById('bugSubmitBtn').addEventListener('click', () => {
+  const description = document.getElementById('bugDescription').value.trim();
+  const userEmail = document.getElementById('bugEmail').value.trim();
+  if (!description) {
+    bugStatusEl.textContent = 'Please describe what happened first.';
+    bugStatusEl.className = 'modal-status err';
+    return;
+  }
+  const loadedFiles = items.map(i => i.name).join(', ');
+  logEvent({
+    eventType: 'bug_report',
+    userNote: description,
+    userEmail,
+    fileName: loadedFiles,
+    status: 'reported'
+  });
+  bugStatusEl.textContent = LOG_ENDPOINT
+    ? 'Thanks — your report was sent.'
+    : 'Logging isn\'t configured yet in this copy of the app, so this report wasn\'t sent anywhere. Ask whoever manages the app to set up LOG_ENDPOINT.';
+  bugStatusEl.className = 'modal-status ' + (LOG_ENDPOINT ? 'ok' : 'err');
+  document.getElementById('bugDescription').value = '';
+  if (LOG_ENDPOINT) setTimeout(() => bugModalBackdrop.classList.remove('open'), 1600);
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  items = [];
+  renderQueue();
+  renderResults();
+});
+
+function transactionsCsv(it){
+  const header = ['Date','Vendor','Description','Amount'];
+  const lines = [csvRow(header)];
+  it.data.transactions.forEach(t => {
+    lines.push(csvRow([t.date, t.vendor, t.description, t.amount]));
+  });
+  return lines.join('\n');
+}
+
+function downloadCombined(){
+  const ok = items.filter(i => i.status === 'ok');
+  if (!ok.length) return;
+
+  const header = ['Date','Vendor','Description','Amount'];
+  const lines = [csvRow(header)];
+  ok.forEach(it => {
+    it.data.transactions.forEach(t => {
+      lines.push(csvRow([t.date, t.vendor, t.description, t.amount]));
+    });
+  });
+
+  const csv = lines.join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'transactions.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function downloadZip(){
+  const ok = items.filter(i => i.status === 'ok');
+  if (!ok.length) return;
+
+  const zip = new JSZip();
+  const usedNames = new Set();
+  ok.forEach(it => {
+    let base = it.name.replace(/\.pdf$/i, '').replace(/[\\/:*?"<>|]/g, '_');
+    let name = base + '.csv';
+    let n = 1;
+    while (usedNames.has(name)) { name = base + '_' + (++n) + '.csv'; }
+    usedNames.add(name);
+    zip.file(name, transactionsCsv(it));
+  });
+
+  const blob = await zip.generateAsync({type:'blob'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'statement_csvs.zip';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function csvRow(arr){
+  return arr.map(v => {
+    v = (v === undefined || v === null) ? '' : String(v);
+    if (/[",\n]/.test(v)) v = '"' + v.replace(/"/g,'""') + '"';
+    return v;
+  }).join(',');
+}
+</script>
+</body>
+</html>
