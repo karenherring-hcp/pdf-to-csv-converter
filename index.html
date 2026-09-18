@@ -338,15 +338,15 @@
 <body>
 <div class="wrap">
   <header class="top">
-    <div class="mark">Statement<span>→</span>CSV</div>
+    <div class="mark">PDF<span>→</span>CSV</div>
     <div style="display:flex;align-items:center;gap:16px;">
       <button class="bugbtn" id="bugReportBtn" type="button">Report a bug</button>
       <div class="count" id="filecount">0 files loaded</div>
     </div>
   </header>
 
-  <h1>Turn card statements into clean CSVs</h1>
-  <p class="lede">Drop in one or more Home Depot Pro Xtra PDF statements. Everything happens in this browser tab — nothing is uploaded to a server.</p>
+  <h1>Turn statement PDFs into clean CSVs</h1>
+  <p class="lede">Drop in one or more bank or credit-card statement PDFs. The format is detected automatically — there's nothing to choose. Everything happens in this browser tab: your statements are never uploaded to a server.</p>
 
   <div class="dropzone" id="dropzone">
     <div class="icon"><i>&#8593;</i></div>
@@ -366,7 +366,7 @@
     <div id="cards"></div>
   </section>
 
-  <footer class="foot">Parses The Home Depot Pro Xtra commercial account statement layout. If a field can't be found on a given statement, it's left blank in the CSV rather than guessed.</footer>
+  <footer class="foot">Recognizes Home Depot Pro Xtra, Amazon Business / American Express, Chase, U.S. Bank, Truist, Woodforest and Navy Federal statement layouts. Any other bank falls back to a general parser that works off document structure rather than that bank's labels — a reasonable first attempt, so check the results. If a field can't be found on a given statement, it's left blank in the CSV rather than guessed.</footer>
 </div>
 
 <div class="modal-backdrop" id="bugModalBackdrop">
