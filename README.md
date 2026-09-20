@@ -78,6 +78,17 @@ log and email an alert.
 
 ### A note on logging
 
+A daily self-test guards this. `runLoggingSelfTest()` submits a tagged row the
+same way the app does — using its own hardcoded copy of the endpoint and field
+ids, deliberately not the form's current ones — then checks the row arrived. If
+it didn't, or if the form's field ids have drifted from what the app posts to,
+it emails an alert. No email means the pipeline is healthy. Run it by hand any
+time to check on demand.
+
+`FORM_WIRED_POST_URL` and `FORM_WIRED_FIELD_MAP` in the .gs must stay identical
+to `LOG_ENDPOINT` and `LOG_FIELD_MAP` in `index.html`; that equality is what the
+self-test is checking.
+
 Logging is **off** unless both `LOG_ENDPOINT` and `LOG_FIELD_MAP` are filled in.
 Leave them empty rather than guessing: when logging is on, the bug-report modal
 tells the user their report was submitted, and it has no way to detect a failed

@@ -21,6 +21,12 @@
 //    Authorize when prompted.
 // 5. Open View > Logs and copy the whole block it prints.
 //
+// This also schedules runLoggingSelfTest to run daily. That's the monitor:
+// it submits a tagged row the same way the app does and checks it arrived,
+// emailing FORM_ALERT_EMAIL if it didn't. No email means logging is healthy.
+// To check on demand, run runLoggingSelfTest by hand — the log line says
+// whether it passed.
+//
 // SAFE TO RE-RUN. It looks for an existing form by title and adopts it rather
 // than creating a second one, only adds questions if there are none, only
 // links the spreadsheet if it isn't linked, and replaces its own trigger
@@ -50,6 +56,28 @@ const FORM_LOG_FIELDS = [
   'userNote',
   'userEmail'
 ];
+
+// ------------------------------------------------------------
+// These MUST stay identical to LOG_ENDPOINT and LOG_FIELD_MAP in index.html.
+// The daily self-test deliberately posts using these copies rather than asking
+// the form for its current ids — that's the whole point. If someone edits the
+// form and Google reassigns the ids, posting to the stale ids fails, the test
+// row never lands, and you get an email. Deriving the ids live would hide
+// exactly the failure this is meant to catch.
+// ------------------------------------------------------------
+const FORM_WIRED_POST_URL =
+  'https://docs.google.com/forms/d/e/1FAIpQLSd813_hfyGvYxop0u_hv4u62SL8OOgjTyNz0D3-ae5D8pPhRg/formResponse';
+
+const FORM_WIRED_FIELD_MAP = {
+  eventType:        'entry.2124701020',
+  issuer:           'entry.295167859',
+  fileName:         'entry.515932360',
+  transactionCount: 'entry.908279194',
+  status:           'entry.525529088',
+  message:          'entry.203522849',
+  userNote:         'entry.1654949428',
+  userEmail:        'entry.640039570'
+};
 
 // FormApp intermittently rejects an edit or read that closely follows another
 // one. Retrying with a widening pause clears it; failing the whole run doesn't.
@@ -138,6 +166,10 @@ function setUpLoggingForm() {
   ScriptApp.newTrigger('onLoggingFormSubmit').forForm(form).onFormSubmit().create();
   Logger.log('Alert trigger registered.');
 
+  // ---- 6. Daily "is logging still alive?" check ------------------------
+  installDailySelfTest_();
+  Logger.log('Daily self-test scheduled (around 7am).');
+
   // Let the edits settle before reading the form back.
   Utilities.sleep(3000);
 
@@ -198,6 +230,138 @@ function showLoggingFormWiring() {
   if (!files.hasNext()) throw new Error('No form titled "' + FORM_TITLE + '" found. Run setUpLoggingForm first.');
   const form = FormApp.openById(files.next().getId());
   Logger.log(buildWiringReport_(form));
+}
+
+// ============================================================
+// Daily self-test — the thing that tells you when logging has broken.
+//
+// The app cannot detect a failed send: browsers hide the response from a
+// cross-site form post, so a broken pipeline looks identical to a working one
+// from the user's side, and they'd still be told their report was submitted.
+// This closes that gap from the outside: once a day it submits a tagged row
+// exactly the way the app does, then checks whether the row actually arrived.
+// If it didn't, you get an email. Silence means it's working.
+// ============================================================
+
+function runLoggingSelfTest() {
+  const token = 'selftest-' + Utilities.getUuid().slice(0, 8);
+  const startedAt = new Date(Date.now() - 60 * 1000);
+
+  const payload = {};
+  payload[FORM_WIRED_FIELD_MAP.eventType] = 'selftest';
+  payload[FORM_WIRED_FIELD_MAP.issuer] = 'monitor';
+  payload[FORM_WIRED_FIELD_MAP.fileName] = token;
+  payload[FORM_WIRED_FIELD_MAP.transactionCount] = '0';
+  payload[FORM_WIRED_FIELD_MAP.status] = 'selftest';
+  payload[FORM_WIRED_FIELD_MAP.message] = 'Automated daily check that logging still works.';
+
+  let postError = null;
+  let httpStatus = null;
+  try {
+    const res = UrlFetchApp.fetch(FORM_WIRED_POST_URL, {
+      method: 'post',
+      payload: payload,
+      followRedirects: true,
+      muteHttpExceptions: true
+    });
+    httpStatus = res.getResponseCode();
+  } catch (err) {
+    postError = err.message;
+  }
+
+  // Did the row actually land? Retry briefly; Forms writes are quick but not
+  // instant, and a slow write shouldn't read as an outage.
+  const form = FormApp.openById(findLoggingFormId_());
+  let landed = false;
+  for (let attempt = 1; attempt <= 6 && !landed; attempt++) {
+    Utilities.sleep(5000);
+    try {
+      landed = form.getResponses(startedAt).some(function (response) {
+        return response.getItemResponses().some(function (ir) {
+          return String(ir.getResponse()).indexOf(token) !== -1;
+        });
+      });
+    } catch (err) {
+      // transient FormApp read failure; try again
+    }
+  }
+
+  // Separately: have the form's ids drifted away from what's wired up? This
+  // catches a form edit before it silently costs you real reports.
+  const drifted = detectFieldIdDrift_(form);
+
+  if (landed && drifted.length === 0) {
+    Logger.log('Self-test OK — ' + token + ' submitted and found. Field ids match.');
+    return;
+  }
+
+  const lines = ['The PDF to CSV Converter logging pipeline looks broken.', ''];
+  if (!landed) {
+    lines.push('A test submission did not arrive in the log.');
+    lines.push('  Token:       ' + token);
+    lines.push('  HTTP status: ' + (httpStatus === null ? 'request threw' : httpStatus));
+    if (postError) lines.push('  Error:       ' + postError);
+    lines.push('');
+    lines.push('Users filing bug reports right now are being told their report');
+    lines.push('was submitted, but nothing is being recorded.');
+    lines.push('');
+  }
+  if (drifted.length > 0) {
+    lines.push('The form\'s field ids no longer match what the app posts to.');
+    lines.push('Someone has probably edited the form\'s questions.');
+    drifted.forEach(function (d) {
+      lines.push('  ' + d.field + ': app posts to ' + d.wired + ', form now expects ' + d.actual);
+    });
+    lines.push('');
+    lines.push('Fix: run showLoggingFormWiring, then update LOG_ENDPOINT and');
+    lines.push('LOG_FIELD_MAP in index.html (and FORM_WIRED_FIELD_MAP here) to match.');
+    lines.push('');
+  }
+  lines.push('App:  https://karenherring-hcp.github.io/pdf-to-csv-converter/');
+  lines.push('Repo: https://github.com/karenherring-hcp/pdf-to-csv-converter');
+
+  MailApp.sendEmail(
+    FORM_ALERT_EMAIL,
+    '[PDF to CSV] ACTION NEEDED — logging has stopped working',
+    lines.join('\n')
+  );
+  Logger.log('Self-test FAILED; alert email sent.');
+}
+
+function findLoggingFormId_() {
+  const files = DriveApp.getFilesByName(FORM_TITLE);
+  if (!files.hasNext()) throw new Error('No form titled "' + FORM_TITLE + '" found.');
+  return files.next().getId();
+}
+
+// Compares the ids the app posts to against the form's current ids.
+function detectFieldIdDrift_(form) {
+  const items = form.getItems(FormApp.ItemType.TEXT).map(function (i) { return i.asTextItem(); });
+  let response = form.createResponse();
+  items.forEach(function (item) {
+    response = response.withItemResponse(item.createResponse(item.getTitle()));
+  });
+
+  const actual = {};
+  response.toPrefilledUrl().split('?')[1].split('&').forEach(function (pair) {
+    const parts = pair.split('=');
+    if (parts[0].indexOf('entry.') === 0) actual[decodeURIComponent(parts[1])] = parts[0];
+  });
+
+  const drift = [];
+  for (const field in FORM_WIRED_FIELD_MAP) {
+    if (actual[field] !== FORM_WIRED_FIELD_MAP[field]) {
+      drift.push({ field: field, wired: FORM_WIRED_FIELD_MAP[field], actual: actual[field] || '(question missing)' });
+    }
+  }
+  return drift;
+}
+
+function installDailySelfTest_() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'runLoggingSelfTest') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('runLoggingSelfTest').timeBased().everyDays(1).atHour(7).create();
 }
 
 function onLoggingFormSubmit(e) {
