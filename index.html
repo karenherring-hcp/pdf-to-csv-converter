@@ -283,6 +283,15 @@
     font-size:13px;
     color:var(--ink-soft);
   }
+  .unknown-note{
+    padding:12px 18px;
+    font-size:13px;
+    line-height:1.5;
+    background:#FFF6EF;
+    border-bottom:1px solid #F2C79A;
+    color:var(--ink);
+  }
+  .unknown-note strong{font-weight:600;}
   footer.foot{
     margin-top:56px;
     padding-top:20px;
@@ -420,7 +429,7 @@ function handleFiles(fileList){
   const files = Array.from(fileList).filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
   files.forEach(f => {
     const id = seq++;
-    items.push({id, name: f.name, status:'busy', data:null, rawText:'', error:null});
+    items.push({id, name: f.name, status:'busy', data:null, rawText:'', error:null, issuer:''});
     processFile(f, id);
   });
   renderQueue();
@@ -519,6 +528,7 @@ async function processFile(file, id){
     item.data = parseStatement(text);
     item.status = 'ok';
     const issuer = detectIssuer(text.replace(/\s+/g,' '));
+    item.issuer = issuer;
     const txCount = item.data.transactions.length;
     logEvent({
       eventType: 'conversion',
@@ -1182,6 +1192,9 @@ function renderResults(){
           <button class="secondary rawtext" data-id="${it.id}" style="padding:6px 12px;font-size:12px;">Raw text</button>
         </div>
       </div>
+      ${it.issuer === 'unknown'
+        ? `<div class="unknown-note"><strong>This bank isn't specifically supported yet.</strong> These rows came from the general-purpose parser, which reads layout rather than this bank's own format — treat them as a draft and check them against the statement before importing. If anything's off, use “Report a bug” above and mention the bank.</div>`
+        : ''}
       <div class="grid3">
         <div class="stat"><div class="label">Account</div><div class="value">${escapeHtml(d.accountNumber || '—')}</div></div>
         <div class="stat"><div class="label">Payment due</div><div class="value">${escapeHtml(d.dueDate || '—')}</div></div>
