@@ -466,8 +466,20 @@ function extractPageText(items){
 // LOG_ENDPOINT is the form's /formResponse URL; LOG_FIELD_MAP maps each payload
 // key to the entry.N id the form expects for it.
 // ============================================================
-const LOG_ENDPOINT = '';
-const LOG_FIELD_MAP = {};
+// Verified 2026-09-20: an anonymous POST to this endpoint (no Google session)
+// returns 200 "Your response has been recorded", with no redirect to a sign-in
+// page. Re-run that check before changing either value.
+const LOG_ENDPOINT = 'https://docs.google.com/forms/d/e/1FAIpQLSd813_hfyGvYxop0u_hv4u62SL8OOgjTyNz0D3-ae5D8pPhRg/formResponse';
+const LOG_FIELD_MAP = {
+  eventType:        'entry.2124701020',
+  issuer:           'entry.295167859',
+  fileName:         'entry.515932360',
+  transactionCount: 'entry.908279194',
+  status:           'entry.525529088',
+  message:          'entry.203522849',
+  userNote:         'entry.1654949428',
+  userEmail:        'entry.640039570'
+};
 
 function loggingEnabled(){
   return !!LOG_ENDPOINT && Object.keys(LOG_FIELD_MAP).length > 0;
