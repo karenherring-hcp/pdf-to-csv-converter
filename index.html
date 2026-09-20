@@ -457,22 +457,37 @@ function extractPageText(items){
 // page), because the housecallpro.com Workspace policy blocks sharing Apps
 // Script web apps outside the domain. A Google Form backend is replacing it.
 //
-// Do not fill this in without first confirming an anonymous POST actually
-// succeeds — a non-empty endpoint makes the bug-report modal report success,
-// so a silently-broken endpoint means users are told their report was
-// submitted when nothing was recorded.
+// Do not fill these in without first confirming an anonymous POST actually
+// succeeds — once logging is on, the bug-report modal reports success, so a
+// silently-broken endpoint means users are told their report was submitted
+// when nothing was recorded.
+//
+// Both values come from running setUpLoggingForm() in AppsScript_FormBackend.gs.
+// LOG_ENDPOINT is the form's /formResponse URL; LOG_FIELD_MAP maps each payload
+// key to the entry.N id the form expects for it.
 // ============================================================
 const LOG_ENDPOINT = '';
+const LOG_FIELD_MAP = {};
+
+function loggingEnabled(){
+  return !!LOG_ENDPOINT && Object.keys(LOG_FIELD_MAP).length > 0;
+}
 
 function logEvent(payload){
-  if (!LOG_ENDPOINT) return;
+  if (!loggingEnabled()) return;
   try {
+    // URLSearchParams sends application/x-www-form-urlencoded, which is what
+    // Google Forms expects and is also a CORS-safelisted content type, so the
+    // browser skips the preflight that forms endpoints wouldn't answer.
+    const body = new URLSearchParams();
+    for (const key in LOG_FIELD_MAP){
+      const v = payload[key];
+      body.append(LOG_FIELD_MAP[key], (v === undefined || v === null) ? '' : String(v));
+    }
     fetch(LOG_ENDPOINT, {
       method: 'POST',
-      mode: 'no-cors', // Apps Script Web Apps don't return CORS headers; we
-                        // don't need to read the response, just fire it off.
-      headers: { 'Content-Type': 'text/plain' }, // avoids a CORS preflight
-      body: JSON.stringify(payload)
+      mode: 'no-cors', // the response is opaque; we only need to fire it off
+      body
     }).catch(() => {}); // never let logging failures affect the user
   } catch (e) { /* ignore */ }
 }
@@ -1210,12 +1225,15 @@ document.getElementById('bugSubmitBtn').addEventListener('click', () => {
     fileName: loadedFiles,
     status: 'reported'
   });
-  bugStatusEl.textContent = LOG_ENDPOINT
+  const sent = loggingEnabled();
+  bugStatusEl.textContent = sent
     ? 'Thanks — your report has been submitted.'
     : 'Bug reporting isn\'t switched on in this copy of the app, so nothing was sent. Please pass these details to whoever shared this link with you.';
-  bugStatusEl.className = 'modal-status ' + (LOG_ENDPOINT ? 'ok' : 'err');
-  document.getElementById('bugDescription').value = '';
-  if (LOG_ENDPOINT) setTimeout(() => bugModalBackdrop.classList.remove('open'), 1600);
+  bugStatusEl.className = 'modal-status ' + (sent ? 'ok' : 'err');
+  if (sent) {
+    document.getElementById('bugDescription').value = '';
+    setTimeout(() => bugModalBackdrop.classList.remove('open'), 1600);
+  }
 });
 
 document.getElementById('clearBtn').addEventListener('click', () => {

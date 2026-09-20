@@ -70,9 +70,27 @@ log and email an alert.
 - `index.html` — the entire app (HTML, CSS, JS inlined). This is the canonical
   copy; fixes and new bank formats get pushed here and go live on GitHub Pages
   automatically.
-- `AppsScript_Code.gs` — the Google Apps Script backend that receives usage and
-  bug-report logs. Deployed as a Web App; its `/exec` URL is set in the
-  `LOG_ENDPOINT` constant near the top of `index.html`'s `<script>` block.
+- `AppsScript_FormBackend.gs` — sets up the usage/bug-report log. Run
+  `setUpLoggingForm()` once from the log Sheet's Apps Script project; it builds
+  a Google Form, points its responses at that Sheet, registers an email alert
+  trigger, and prints the two values to paste into `LOG_ENDPOINT` and
+  `LOG_FIELD_MAP` in `index.html`.
+
+### A note on logging
+
+Logging is **off** unless both `LOG_ENDPOINT` and `LOG_FIELD_MAP` are filled in.
+Leave them empty rather than guessing: when logging is on, the bug-report modal
+tells the user their report was submitted, and it has no way to detect a failed
+send (the response is opaque by design). A misconfigured endpoint therefore
+means users are thanked for reports that were never recorded. Verify an
+anonymous POST succeeds before enabling it.
+
+The earlier approach — an Apps Script web app receiving JSON — is in git history
+but doesn't work here. The housecallpro.com Workspace policy blocks sharing Apps
+Script web apps outside the domain, so anonymous requests get redirected to a
+Google sign-in page and fail with 401 no matter what the deployment's access
+setting says. A Google Form's login requirement is controlled per-form by its
+owner, which is why it works without admin involvement.
 
 External dependencies (pdf.js and JSZip) load from cdnjs at runtime; there's no
 build step and nothing to install.
