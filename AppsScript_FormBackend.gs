@@ -16,7 +16,13 @@
 // 1. Open the "Statement-to-CSV — Usage Log" Sheet > Extensions > Apps Script.
 // 2. Add this as a NEW file (File > + > Script). Leave any existing code
 //    alone — the old doPost is dead but harmless.
-// 3. Set ALERT_EMAIL below if it should go somewhere other than Karen.
+// 3. Set FORM_ALERT_EMAIL below if it should go somewhere other than Karen.
+//
+// Every .gs file in an Apps Script project shares ONE global scope, so a
+// top-level name declared here must not also exist in the old file. That's
+// why the constants below carry a FORM_ prefix: the old backend already
+// declares ALERT_EMAIL, and two `const ALERT_EMAIL` declarations anywhere in
+// the project are a SyntaxError that stops every function from running.
 // 4. Select "setUpLoggingForm" in the function dropdown and click Run.
 //    Authorize when prompted.
 // 5. Open View > Logs and copy the whole block it prints. That output has
@@ -25,10 +31,10 @@
 // Running setUpLoggingForm twice creates a SECOND form. Run it once.
 // ============================================================
 
-const ALERT_EMAIL = 'karen.herring@housecallpro.com';
+const FORM_ALERT_EMAIL = 'karen.herring@housecallpro.com';
 
 // Order matters only for readability; the wiring is by name.
-const LOG_FIELDS = [
+const FORM_LOG_FIELDS = [
   'eventType',
   'issuer',
   'fileName',
@@ -56,7 +62,7 @@ function setUpLoggingForm() {
   form.setAcceptingResponses(true);
   form.setProgressBar(false);
 
-  const items = LOG_FIELDS.map(function (name) {
+  const items = FORM_LOG_FIELDS.map(function (name) {
     return form.addTextItem().setTitle(name);
   });
 
@@ -126,7 +132,7 @@ function onLoggingFormSubmit(e) {
     'Time: ' + new Date()
   ].join('\n');
 
-  MailApp.sendEmail(ALERT_EMAIL, subject, body);
+  MailApp.sendEmail(FORM_ALERT_EMAIL, subject, body);
 }
 
 // Prints the wiring details again without creating anything. Useful if the
