@@ -81,7 +81,10 @@ const FORM_WIRED_FIELD_MAP = {
   status:           'entry.525529088',
   message:          'entry.203522849',
   userNote:         'entry.1654949428',
-  userEmail:        'entry.640039570'
+  userEmail:        'entry.640039570',
+  orgId:            'entry.2087700925',
+  bankReported:     'entry.923042208',
+  statementMonth:   'entry.394294366'
 };
 
 // FormApp intermittently rejects an edit or read that closely follows another
