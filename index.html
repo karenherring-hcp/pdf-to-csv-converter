@@ -334,6 +334,20 @@
   }
   .modal h3{margin:0 0 6px;font-size:18px;}
   .modal-sub{font-size:13px;color:var(--ink-soft);margin:0 0 14px;}
+  .modal{max-height:90vh;overflow-y:auto;}
+  .modal label.fl{
+    display:block;
+    font-size:12px;
+    font-weight:500;
+    margin-bottom:4px;
+    color:var(--ink);
+  }
+  .modal label.fl .opt{font-weight:400;color:var(--ink-soft);}
+  .modal .hint{
+    font-size:11px;
+    color:var(--ink-soft);
+    margin:-6px 0 10px;
+  }
   .modal textarea, .modal input{
     width:100%;
     border:1px solid var(--line-strong);
@@ -389,9 +403,23 @@
 <div class="modal-backdrop" id="bugModalBackdrop">
   <div class="modal">
     <h3>Report a bug</h3>
-    <p class="modal-sub">What happened? Include the bank/statement if it's specific to one.</p>
-    <textarea id="bugDescription" rows="5" placeholder="e.g. Uploaded a Chase statement and it found 0 transactions..."></textarea>
-    <input type="email" id="bugEmail" placeholder="Your email (optional, in case we need to follow up)">
+    <p class="modal-sub">Please don't paste statement contents — what's below is enough to investigate.</p>
+
+    <label class="fl" for="bugDescription">What went wrong?</label>
+    <textarea id="bugDescription" rows="4" placeholder="e.g. Every payment came through as a positive amount instead of negative"></textarea>
+
+    <label class="fl" for="bugOrgId">Pro Org ID</label>
+    <input type="text" id="bugOrgId" placeholder="e.g. 349968">
+
+    <label class="fl" for="bugBank">Bank</label>
+    <input type="text" id="bugBank" placeholder="e.g. Regions Bank">
+
+    <label class="fl" for="bugStatementMonth">Statement month <span class="opt">(optional)</span></label>
+    <input type="text" id="bugStatementMonth" placeholder="e.g. Aug 2026">
+
+    <label class="fl" for="bugEmail">Your email <span class="opt">(optional)</span></label>
+    <input type="email" id="bugEmail" placeholder="So we can follow up if we need to">
+
     <div class="modal-actions">
       <button class="secondary" id="bugCancelBtn" type="button">Cancel</button>
       <button class="primary" id="bugSubmitBtn" type="button">Send report</button>
@@ -1223,9 +1251,36 @@ function renderResults(){
 const bugModalBackdrop = document.getElementById('bugModalBackdrop');
 const bugStatusEl = document.getElementById('bugStatus');
 
+const ISSUER_LABELS = {
+  homedepot: 'Home Depot Pro Xtra',
+  amex: 'Amazon Business / American Express',
+  chase: 'Chase',
+  usbank: 'U.S. Bank',
+  truist: 'Truist',
+  woodforest: 'Woodforest National Bank',
+  nfcu: 'Navy Federal Credit Union'
+};
+
 document.getElementById('bugReportBtn').addEventListener('click', () => {
   bugStatusEl.textContent = '';
   bugStatusEl.className = 'modal-status';
+
+  // Prefill whatever the app already worked out, so the reporter types less and
+  // the answer is right more often. Never overwrite something they've typed.
+  const loaded = items.filter(i => i.status === 'ok');
+  if (loaded.length) {
+    const bankEl = document.getElementById('bugBank');
+    if (!bankEl.value) {
+      const named = loaded.map(i => ISSUER_LABELS[i.issuer]).filter(Boolean);
+      bankEl.value = [...new Set(named)].join(', ');
+    }
+    const monthEl = document.getElementById('bugStatementMonth');
+    if (!monthEl.value) {
+      const d = loaded[0].data || {};
+      monthEl.value = d.closingDate || d.dueDate || '';
+    }
+  }
+
   bugModalBackdrop.classList.add('open');
 });
 document.getElementById('bugCancelBtn').addEventListener('click', () => {
@@ -1234,22 +1289,57 @@ document.getElementById('bugCancelBtn').addEventListener('click', () => {
 bugModalBackdrop.addEventListener('click', (e) => {
   if (e.target === bugModalBackdrop) bugModalBackdrop.classList.remove('open');
 });
+const BUG_FIELD_LABELS = {
+  orgId: 'Pro Org ID',
+  bankReported: 'Bank',
+  statementMonth: 'Statement month'
+};
+
 document.getElementById('bugSubmitBtn').addEventListener('click', () => {
   const description = document.getElementById('bugDescription').value.trim();
   const userEmail = document.getElementById('bugEmail').value.trim();
+  const reported = {
+    orgId: document.getElementById('bugOrgId').value.trim(),
+    bankReported: document.getElementById('bugBank').value.trim(),
+    statementMonth: document.getElementById('bugStatementMonth').value.trim()
+  };
+
   if (!description) {
-    bugStatusEl.textContent = 'Please describe what happened first.';
+    bugStatusEl.textContent = 'Please describe what went wrong first.';
     bugStatusEl.className = 'modal-status err';
     return;
   }
-  const loadedFiles = items.map(i => i.name).join(', ');
-  logEvent({
+  if (!reported.orgId) {
+    bugStatusEl.textContent = 'Please add the Pro Org ID — without it the account can\'t be looked up.';
+    bugStatusEl.className = 'modal-status err';
+    return;
+  }
+  if (!reported.bankReported) {
+    bugStatusEl.textContent = 'Please name the bank, even if the app guessed wrong.';
+    bugStatusEl.className = 'modal-status err';
+    return;
+  }
+
+  // If the log doesn't have a dedicated column for one of these yet, fold it
+  // into the note rather than dropping it on the floor.
+  const homeless = Object.keys(reported).filter(k => !LOG_FIELD_MAP[k]);
+  const userNote = homeless.length
+    ? homeless.map(k => BUG_FIELD_LABELS[k] + ': ' + (reported[k] || '—')).join('\n') + '\n\n' + description
+    : description;
+
+  const loaded = items.filter(i => i.status === 'ok');
+  logEvent(Object.assign({
     eventType: 'bug_report',
-    userNote: description,
+    userNote,
     userEmail,
-    fileName: loadedFiles,
+    fileName: items.map(i => i.name).join(', '),
+    // What the app detected, as distinct from what the reporter said — a
+    // mismatch between the two is itself a useful diagnostic.
+    issuer: loaded.map(i => i.issuer || 'none').join(', '),
+    transactionCount: loaded.map(i => i.data.transactions.length).join(', '),
     status: 'reported'
-  });
+  }, reported));
+
   const sent = loggingEnabled();
   bugStatusEl.textContent = sent
     ? 'Thanks — your report has been submitted.'
@@ -1257,6 +1347,7 @@ document.getElementById('bugSubmitBtn').addEventListener('click', () => {
   bugStatusEl.className = 'modal-status ' + (sent ? 'ok' : 'err');
   if (sent) {
     document.getElementById('bugDescription').value = '';
+    document.getElementById('bugOrgId').value = '';
     setTimeout(() => bugModalBackdrop.classList.remove('open'), 1600);
   }
 });

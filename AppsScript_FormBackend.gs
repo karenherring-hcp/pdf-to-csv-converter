@@ -54,7 +54,12 @@ const FORM_LOG_FIELDS = [
   'status',
   'message',
   'userNote',
-  'userEmail'
+  'userEmail',
+  // Added later for bug triage. Adding questions does NOT change the ids of
+  // existing ones, so extending this list is safe; renaming or deleting is not.
+  'orgId',
+  'bankReported',
+  'statementMonth'
 ];
 
 // ------------------------------------------------------------
@@ -134,17 +139,25 @@ function setUpLoggingForm() {
   });
   Logger.log('Settings applied.');
 
-  // ---- 3. Questions (only if the form has none) ------------------------
-  let items = form.getItems(FormApp.ItemType.TEXT).map(function (i) { return i.asTextItem(); });
-  if (items.length === 0) {
-    items = FORM_LOG_FIELDS.map(function (name) {
-      return formRetry_('add question "' + name + '"', function () {
+  // ---- 3. Questions (add only the missing ones) ------------------------
+  // Adding a question leaves every existing question's id untouched, so this
+  // can extend an existing form safely. Never rename or delete a question:
+  // that's what reassigns ids and silently breaks the app's posting.
+  const existingTitles = form.getItems(FormApp.ItemType.TEXT).map(function (i) {
+    return i.asTextItem().getTitle();
+  });
+  const missing = FORM_LOG_FIELDS.filter(function (name) {
+    return existingTitles.indexOf(name) === -1;
+  });
+  if (missing.length === 0) {
+    Logger.log('All ' + FORM_LOG_FIELDS.length + ' questions already present.');
+  } else {
+    missing.forEach(function (name) {
+      formRetry_('add question "' + name + '"', function () {
         return form.addTextItem().setTitle(name);
       });
     });
-    Logger.log('Added ' + items.length + ' questions.');
-  } else {
-    Logger.log('Form already has ' + items.length + ' questions; left as-is.');
+    Logger.log('Added ' + missing.length + ' missing question(s): ' + missing.join(', '));
   }
 
   // ---- 4. Link responses to this spreadsheet (only if unlinked) --------
