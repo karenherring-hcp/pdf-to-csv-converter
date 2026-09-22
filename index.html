@@ -1532,8 +1532,10 @@ document.getElementById('bugSubmitBtn').addEventListener('click', () => {
 
   const sent = loggingEnabled();
   bugStatusEl.textContent = sent
-    ? 'Thanks — your report has been submitted.'
-    : 'Bug reporting isn\'t switched on in this copy of the app, so nothing was sent. Please pass these details to whoever shared this link with you.';
+    ? (feedbackKind === 'bug'
+        ? 'Thanks — your report has been submitted.'
+        : 'Thanks — your feedback has been submitted.')
+    : 'Feedback isn\'t switched on in this copy of the app, so nothing was sent. Please pass these details to whoever shared this link with you.';
   bugStatusEl.className = 'modal-status ' + (sent ? 'ok' : 'err');
   if (sent) {
     document.getElementById('bugDescription').value = '';
