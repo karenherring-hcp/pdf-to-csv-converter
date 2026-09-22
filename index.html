@@ -363,6 +363,25 @@
   .modal-status{font-size:13px;margin-top:10px;min-height:18px;}
   .modal-status.ok{color:var(--green);}
   .modal-status.err{color:var(--red);}
+  .kindrow{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+  .kindrow button{
+    flex:1 1 auto;
+    background:none;
+    border:1px solid var(--line-strong);
+    color:var(--ink-soft);
+    padding:9px 10px;
+    border-radius:4px;
+    font-family:'IBM Plex Sans',sans-serif;
+    font-size:13px;
+    font-weight:500;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .kindrow button.on{
+    background:var(--ink);
+    border-color:var(--ink);
+    color:#fff;
+  }
 </style>
 </head>
 
@@ -370,8 +389,9 @@
 <div class="wrap">
   <header class="top">
     <div class="mark">PDF<span>→</span>CSV</div>
-    <div style="display:flex;align-items:center;gap:16px;">
-      <button class="bugbtn" id="bugReportBtn" type="button">Report a bug</button>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <button class="bugbtn" id="whoBtn" type="button">Not identified</button>
+      <button class="bugbtn" id="bugReportBtn" type="button">Feedback</button>
       <div class="count" id="filecount">0 files loaded</div>
     </div>
   </header>
@@ -400,22 +420,46 @@
   <footer class="foot">Recognizes Home Depot Pro Xtra, Amazon Business / American Express, Chase, U.S. Bank, Truist, Woodforest and Navy Federal statement layouts. Any other bank falls back to a general parser that works off document structure rather than that bank's labels — a reasonable first attempt, so check the results. If a field can't be found on a given statement, it's left blank in the CSV rather than guessed.</footer>
 </div>
 
+<div class="modal-backdrop" id="whoModalBackdrop">
+  <div class="modal">
+    <h3>Who's using this?</h3>
+    <p class="modal-sub">Recorded with each conversion so we know which tools are being used and who to follow up with about a problem. Your statements are still never uploaded — this is just your name.</p>
+    <label class="fl" for="whoName">Your name</label>
+    <input type="text" id="whoName" placeholder="e.g. Karen Herring">
+    <label class="fl" for="whoEmail">Work email <span class="opt">(optional)</span></label>
+    <input type="email" id="whoEmail" placeholder="e.g. you@housecallpro.com">
+    <div class="modal-actions">
+      <button class="secondary" id="whoSkipBtn" type="button">Not now</button>
+      <button class="primary" id="whoSaveBtn" type="button">Save</button>
+    </div>
+    <div class="modal-status" id="whoStatus"></div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="bugModalBackdrop">
   <div class="modal">
-    <h3>Report a bug</h3>
-    <p class="modal-sub">Please don't paste statement contents — what's below is enough to investigate.</p>
+    <h3 id="bugModalTitle">Feedback</h3>
+    <p class="modal-sub" id="bugModalSub">What kind of feedback is this?</p>
 
-    <label class="fl" for="bugDescription">What went wrong?</label>
+    <div class="kindrow" id="bugKindRow">
+      <button type="button" data-kind="bug" class="on">Something's wrong</button>
+      <button type="button" data-kind="suggestion">Suggestion</button>
+      <button type="button" data-kind="praise">It's working well</button>
+    </div>
+
+    <label class="fl" for="bugDescription" id="bugDescLabel">What went wrong?</label>
     <textarea id="bugDescription" rows="4" placeholder="e.g. Every payment came through as a positive amount instead of negative"></textarea>
 
-    <label class="fl" for="bugOrgId">Pro Org ID</label>
-    <input type="text" id="bugOrgId" placeholder="e.g. 349968">
+    <div id="bugOnlyFields">
+      <label class="fl" for="bugOrgId">Pro Org ID</label>
+      <input type="text" id="bugOrgId" placeholder="e.g. 349968">
 
-    <label class="fl" for="bugBank">Bank</label>
-    <input type="text" id="bugBank" placeholder="e.g. Regions Bank">
+      <label class="fl" for="bugBank">Bank</label>
+      <input type="text" id="bugBank" placeholder="e.g. Regions Bank">
 
-    <label class="fl" for="bugStatementMonth">Statement month <span class="opt">(optional)</span></label>
-    <input type="text" id="bugStatementMonth" placeholder="e.g. Aug 2026">
+      <label class="fl" for="bugStatementMonth">Statement month <span class="opt">(optional)</span></label>
+      <input type="text" id="bugStatementMonth" placeholder="e.g. Aug 2026">
+    </div>
 
     <label class="fl" for="bugEmail">Your email <span class="opt">(optional)</span></label>
     <input type="email" id="bugEmail" placeholder="So we can follow up if we need to">
@@ -525,9 +569,60 @@ function loggingEnabled(){
   return !!LOG_ENDPOINT && Object.keys(LOG_FIELD_MAP).length > 0;
 }
 
+// ------------------------------------------------------------
+// Who's using the tool. Stored in this browser only and attached to every
+// logged event, so usage can be attributed per person and a problem can be
+// followed up. It is self-declared, not verified — fine for an internal
+// audience, but don't treat it as proof of identity. Hosting this from Apps
+// Script instead would make it automatic and trustworthy.
+// ------------------------------------------------------------
+const WHO_KEY = 'pdf2csv.who';
+
+function getWho(){
+  try {
+    const raw = localStorage.getItem(WHO_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; } // private mode, blocked storage, bad JSON
+}
+
+function setWho(who){
+  try { localStorage.setItem(WHO_KEY, JSON.stringify(who)); } catch (e) { /* not fatal */ }
+}
+
+function whoLabel(){
+  const who = getWho();
+  if (!who || !who.name) return '';
+  return who.email ? who.name + ' <' + who.email + '>' : who.name;
+}
+
+let whoPromptShown = false;
+
+// Asked once, after the first conversion has already succeeded — never as a
+// gate in front of the tool. Someone who picks "Not now" isn't asked again.
+function maybeAskWho(){
+  if (whoPromptShown) return;
+  const who = getWho();
+  if (who && (who.name || who.asked)) return;
+  whoPromptShown = true;
+  setTimeout(openWhoModal, 600);
+}
+
+function renderWhoButton(){
+  const btn = document.getElementById('whoBtn');
+  const who = getWho();
+  btn.textContent = (who && who.name) ? who.name : 'Not identified';
+  btn.title = (who && who.name) ? 'Change who this is recorded as' : 'Tell us who you are';
+}
+
 function logEvent(payload){
   if (!loggingEnabled()) return;
   try {
+    // Attach who this is, unless the payload already named someone (a feedback
+    // form where they typed a different address).
+    if (!payload.userEmail) {
+      const label = whoLabel();
+      if (label) payload = Object.assign({}, payload, { userEmail: label });
+    }
     // URLSearchParams sends application/x-www-form-urlencoded, which is what
     // Google Forms expects and is also a CORS-safelisted content type, so the
     // browser skips the preflight that forms endpoints wouldn't answer.
@@ -581,6 +676,7 @@ async function processFile(file, id){
   }
   renderQueue();
   renderResults();
+  if (items.some(i => i.status === 'ok')) maybeAskWho();
 }
 
 function num(s){
@@ -1254,6 +1350,40 @@ function renderResults(){
 const bugModalBackdrop = document.getElementById('bugModalBackdrop');
 const bugStatusEl = document.getElementById('bugStatus');
 
+const whoModalBackdrop = document.getElementById('whoModalBackdrop');
+
+function openWhoModal(){
+  const who = getWho() || {};
+  document.getElementById('whoName').value = who.name || '';
+  document.getElementById('whoEmail').value = who.email || '';
+  document.getElementById('whoStatus').textContent = '';
+  whoModalBackdrop.classList.add('open');
+}
+
+document.getElementById('whoBtn').addEventListener('click', openWhoModal);
+document.getElementById('whoSkipBtn').addEventListener('click', () => {
+  // Remember that we asked, so nobody gets nagged on every visit.
+  setWho(Object.assign({ asked: true }, getWho() || {}));
+  whoModalBackdrop.classList.remove('open');
+});
+whoModalBackdrop.addEventListener('click', (e) => {
+  if (e.target === whoModalBackdrop) whoModalBackdrop.classList.remove('open');
+});
+document.getElementById('whoSaveBtn').addEventListener('click', () => {
+  const name = document.getElementById('whoName').value.trim();
+  if (!name) {
+    const s = document.getElementById('whoStatus');
+    s.textContent = 'Please enter a name, or choose "Not now".';
+    s.className = 'modal-status err';
+    return;
+  }
+  setWho({ name, email: document.getElementById('whoEmail').value.trim(), asked: true });
+  renderWhoButton();
+  whoModalBackdrop.classList.remove('open');
+});
+
+renderWhoButton();
+
 const ISSUER_LABELS = {
   homedepot: 'Home Depot Pro Xtra',
   amex: 'Amazon Business / American Express',
@@ -1284,6 +1414,7 @@ document.getElementById('bugReportBtn').addEventListener('click', () => {
     }
   }
 
+  applyFeedbackKind('bug');
   bugModalBackdrop.classList.add('open');
 });
 document.getElementById('bugCancelBtn').addEventListener('click', () => {
@@ -1298,6 +1429,52 @@ const BUG_FIELD_LABELS = {
   statementMonth: 'Statement month'
 };
 
+// Only a "something's wrong" report needs an account to investigate against.
+// Asking a suggestion for an Org ID is how you stop getting suggestions.
+const FEEDBACK_KINDS = {
+  bug: {
+    title: 'Something went wrong',
+    sub: 'Please don\'t paste statement contents — what\'s below is enough to investigate.',
+    label: 'What went wrong?',
+    placeholder: 'e.g. Every payment came through as a positive amount instead of negative',
+    needsAccount: true
+  },
+  suggestion: {
+    title: 'Suggestion',
+    sub: 'What would make this more useful? Another bank, a different column, anything.',
+    label: 'What would you change?',
+    placeholder: 'e.g. Could it also handle Wells Fargo statements?',
+    needsAccount: false
+  },
+  praise: {
+    title: 'Glad it\'s working',
+    sub: 'Useful to know what\'s worth keeping — and it helps make the case for building more of these.',
+    label: 'What\'s working well?',
+    placeholder: 'e.g. Saves me about 20 minutes on each monthly close',
+    needsAccount: false
+  }
+};
+
+let feedbackKind = 'bug';
+
+function applyFeedbackKind(kind){
+  feedbackKind = kind;
+  const cfg = FEEDBACK_KINDS[kind];
+  document.getElementById('bugModalTitle').textContent = cfg.title;
+  document.getElementById('bugModalSub').textContent = cfg.sub;
+  document.getElementById('bugDescLabel').textContent = cfg.label;
+  document.getElementById('bugDescription').placeholder = cfg.placeholder;
+  document.getElementById('bugOnlyFields').style.display = cfg.needsAccount ? 'block' : 'none';
+  document.querySelectorAll('#bugKindRow button').forEach(b => {
+    b.classList.toggle('on', b.dataset.kind === kind);
+  });
+  document.getElementById('bugStatus').textContent = '';
+}
+
+document.querySelectorAll('#bugKindRow button').forEach(b => {
+  b.addEventListener('click', () => applyFeedbackKind(b.dataset.kind));
+});
+
 document.getElementById('bugSubmitBtn').addEventListener('click', () => {
   const description = document.getElementById('bugDescription').value.trim();
   const userEmail = document.getElementById('bugEmail').value.trim();
@@ -1307,32 +1484,42 @@ document.getElementById('bugSubmitBtn').addEventListener('click', () => {
     statementMonth: document.getElementById('bugStatementMonth').value.trim()
   };
 
+  const needsAccount = FEEDBACK_KINDS[feedbackKind].needsAccount;
+
   if (!description) {
-    bugStatusEl.textContent = 'Please describe what went wrong first.';
+    bugStatusEl.textContent = 'Please fill in the box above first.';
     bugStatusEl.className = 'modal-status err';
     return;
   }
-  if (!reported.orgId) {
+  if (needsAccount && !reported.orgId) {
     bugStatusEl.textContent = 'Please add the Pro Org ID — without it the account can\'t be looked up.';
     bugStatusEl.className = 'modal-status err';
     return;
   }
-  if (!reported.bankReported) {
+  if (needsAccount && !reported.bankReported) {
     bugStatusEl.textContent = 'Please name the bank, even if the app guessed wrong.';
     bugStatusEl.className = 'modal-status err';
     return;
   }
+  if (!needsAccount) {
+    // Don't ship stale bug-only fields on a suggestion.
+    reported.orgId = '';
+    reported.bankReported = '';
+    reported.statementMonth = '';
+  }
 
   // If the log doesn't have a dedicated column for one of these yet, fold it
   // into the note rather than dropping it on the floor.
-  const homeless = Object.keys(reported).filter(k => !LOG_FIELD_MAP[k]);
+  const homeless = Object.keys(reported).filter(k => !LOG_FIELD_MAP[k] && reported[k]);
   const userNote = homeless.length
-    ? homeless.map(k => BUG_FIELD_LABELS[k] + ': ' + (reported[k] || '—')).join('\n') + '\n\n' + description
+    ? homeless.map(k => BUG_FIELD_LABELS[k] + ': ' + reported[k]).join('\n') + '\n\n' + description
     : description;
 
   const loaded = items.filter(i => i.status === 'ok');
   logEvent(Object.assign({
-    eventType: 'bug_report',
+    // Kept as bug_report for "something's wrong" so the existing alert trigger
+    // and any Sheet filters keep working; other kinds get their own type.
+    eventType: feedbackKind === 'bug' ? 'bug_report' : 'feedback_' + feedbackKind,
     userNote,
     userEmail,
     fileName: items.map(i => i.name).join(', '),
