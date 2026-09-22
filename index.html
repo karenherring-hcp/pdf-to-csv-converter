@@ -422,15 +422,15 @@
 
 <div class="modal-backdrop" id="whoModalBackdrop">
   <div class="modal">
-    <h3>Who's using this?</h3>
-    <p class="modal-sub">Recorded with each conversion so we know which tools are being used and who to follow up with about a problem. Your statements are still never uploaded — this is just your name.</p>
+    <h3>Before you download — who are you?</h3>
+    <p class="modal-sub">Asked once, then remembered on this computer. It's recorded with each conversion so we can report on who's using the tool and follow up if something goes wrong. Your statements are still never uploaded — this is just your name.</p>
     <label class="fl" for="whoName">Your name</label>
     <input type="text" id="whoName" placeholder="e.g. Karen Herring">
     <label class="fl" for="whoEmail">Work email <span class="opt">(optional)</span></label>
     <input type="email" id="whoEmail" placeholder="e.g. you@housecallpro.com">
     <div class="modal-actions">
-      <button class="secondary" id="whoSkipBtn" type="button">Not now</button>
-      <button class="primary" id="whoSaveBtn" type="button">Save</button>
+      <button class="secondary" id="whoCancelBtn" type="button">Cancel</button>
+      <button class="primary" id="whoSaveBtn" type="button">Save and download</button>
     </div>
     <div class="modal-status" id="whoStatus"></div>
   </div>
@@ -570,13 +570,37 @@ function loggingEnabled(){
 }
 
 // ------------------------------------------------------------
-// Who's using the tool. Stored in this browser only and attached to every
-// logged event, so usage can be attributed per person and a problem can be
-// followed up. It is self-declared, not verified — fine for an internal
-// audience, but don't treat it as proof of identity. Hosting this from Apps
-// Script instead would make it automatic and trustworthy.
+// Who's using the tool. Asked once before the first download, then remembered
+// in this browser and attached to every logged event, so usage can be reported
+// per person and a problem can be followed up.
+//
+// Deliberately NOT a login. Requiring a Google or company account would lock
+// out the people this tool exists for — plenty of the team don't have one, and
+// universal access is the whole point of hosting it as a plain web page. The
+// trade is that the name is self-declared: good enough to report on for an
+// internal audience with no reason to lie, not proof of identity.
 // ------------------------------------------------------------
 const WHO_KEY = 'pdf2csv.who';
+
+// When this page is served by Apps Script, the server rewrites the line below
+// with the signed-in Google account before sending it. Served as a plain static
+// page there's no login, so it stays empty and we fall back to asking.
+// The marker string is what the server looks for — don't reformat this line.
+let SERVER_IDENTITY = {"name":"","email":""}; /*SERVER_IDENTITY*/
+
+// Single source of truth for who the current user is. A signed-in identity
+// always wins over a typed one: it can't be wrong, and it can't be someone
+// else's name left behind on a shared machine.
+function resolvedWho(){
+  if (SERVER_IDENTITY && SERVER_IDENTITY.email) {
+    return {
+      name: SERVER_IDENTITY.name || SERVER_IDENTITY.email,
+      email: SERVER_IDENTITY.email,
+      verified: true
+    };
+  }
+  return getWho();
+}
 
 function getWho(){
   try {
@@ -590,28 +614,41 @@ function setWho(who){
 }
 
 function whoLabel(){
-  const who = getWho();
+  const who = resolvedWho();
   if (!who || !who.name) return '';
-  return who.email ? who.name + ' <' + who.email + '>' : who.name;
+  const label = who.email ? who.name + ' <' + who.email + '>' : who.name;
+  // Mark unverified names so a report can tell a signed-in user from a typed one.
+  return who.verified ? label : label + ' (self-reported)';
 }
 
-let whoPromptShown = false;
+function haveWho(){
+  const who = resolvedWho();
+  return !!(who && who.name);
+}
 
-// Asked once, after the first conversion has already succeeded — never as a
-// gate in front of the tool. Someone who picks "Not now" isn't asked again.
-function maybeAskWho(){
-  if (whoPromptShown) return;
-  const who = getWho();
-  if (who && (who.name || who.asked)) return;
-  whoPromptShown = true;
-  setTimeout(openWhoModal, 600);
+// Runs `action` once we know who this is. The ask happens at the first
+// download rather than on arrival: by then the tool has already proved itself,
+// so it reads as signing for something useful rather than a toll gate. Asked
+// once per browser, never again.
+let pendingAfterWho = null;
+function withWho(action){
+  if (haveWho()) { action(); return; }
+  pendingAfterWho = action;
+  openWhoModal();
 }
 
 function renderWhoButton(){
   const btn = document.getElementById('whoBtn');
-  const who = getWho();
+  const who = resolvedWho();
   btn.textContent = (who && who.name) ? who.name : 'Not identified';
-  btn.title = (who && who.name) ? 'Change who this is recorded as' : 'Tell us who you are';
+  if (who && who.verified) {
+    // Signed in — nothing to change, so don't offer a button that implies there is.
+    btn.title = 'Signed in as ' + who.email;
+    btn.disabled = true;
+    btn.style.cursor = 'default';
+  } else {
+    btn.title = (who && who.name) ? 'Change who this is recorded as' : 'Tell us who you are';
+  }
 }
 
 function logEvent(payload){
@@ -676,7 +713,6 @@ async function processFile(file, id){
   }
   renderQueue();
   renderResults();
-  if (items.some(i => i.status === 'ok')) maybeAskWho();
 }
 
 function num(s){
@@ -1286,7 +1322,7 @@ function renderResults(){
     downloadPromptEl.innerHTML = `<div class="actions" style="margin-bottom:20px;">
       <button class="primary" id="downloadSingleBtn">Download CSV</button>
     </div>`;
-    document.getElementById('downloadSingleBtn').addEventListener('click', downloadCombined);
+    document.getElementById('downloadSingleBtn').addEventListener('click', () => withWho(downloadCombined));
   } else {
     downloadPromptEl.innerHTML = `<div class="prompt-card">
       <div class="q">All <span class="n">${ok.length}</span> statements are ready. How do you want the CSVs?
@@ -1297,8 +1333,8 @@ function renderResults(){
         <button class="primary" id="downloadBtn">One combined CSV</button>
       </div>
     </div>`;
-    document.getElementById('downloadBtn').addEventListener('click', downloadCombined);
-    document.getElementById('downloadZipBtn').addEventListener('click', downloadZip);
+    document.getElementById('downloadBtn').addEventListener('click', () => withWho(downloadCombined));
+    document.getElementById('downloadZipBtn').addEventListener('click', () => withWho(downloadZip));
   }
 
   cardsEl.innerHTML = ok.map(it => {
@@ -1360,26 +1396,35 @@ function openWhoModal(){
   whoModalBackdrop.classList.add('open');
 }
 
-document.getElementById('whoBtn').addEventListener('click', openWhoModal);
-document.getElementById('whoSkipBtn').addEventListener('click', () => {
-  // Remember that we asked, so nobody gets nagged on every visit.
-  setWho(Object.assign({ asked: true }, getWho() || {}));
+document.getElementById('whoBtn').addEventListener('click', () => {
+  pendingAfterWho = null;   // opened from the header, not mid-download
+  openWhoModal();
+});
+document.getElementById('whoCancelBtn').addEventListener('click', () => {
+  pendingAfterWho = null;
   whoModalBackdrop.classList.remove('open');
 });
 whoModalBackdrop.addEventListener('click', (e) => {
-  if (e.target === whoModalBackdrop) whoModalBackdrop.classList.remove('open');
+  if (e.target === whoModalBackdrop) {
+    pendingAfterWho = null;
+    whoModalBackdrop.classList.remove('open');
+  }
 });
 document.getElementById('whoSaveBtn').addEventListener('click', () => {
   const name = document.getElementById('whoName').value.trim();
   if (!name) {
     const s = document.getElementById('whoStatus');
-    s.textContent = 'Please enter a name, or choose "Not now".';
+    s.textContent = 'Please enter your name so we can credit the usage.';
     s.className = 'modal-status err';
     return;
   }
-  setWho({ name, email: document.getElementById('whoEmail').value.trim(), asked: true });
+  setWho({ name, email: document.getElementById('whoEmail').value.trim() });
   renderWhoButton();
   whoModalBackdrop.classList.remove('open');
+  // Carry on with whatever they were doing — the download still happens.
+  const next = pendingAfterWho;
+  pendingAfterWho = null;
+  if (next) next();
 });
 
 renderWhoButton();
