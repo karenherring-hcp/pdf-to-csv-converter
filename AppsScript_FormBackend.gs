@@ -186,6 +186,10 @@ function setUpLoggingForm() {
   installDailySelfTest_();
   Logger.log('Daily self-test scheduled (around 7am).');
 
+  // ---- 7. Weekly usage report ------------------------------------------
+  installWeeklySummary_();
+  Logger.log('Weekly usage summary scheduled (Mondays, around 6am).');
+
   // Let the edits settle before reading the form back.
   Utilities.sleep(3000);
 
@@ -378,6 +382,149 @@ function installDailySelfTest_() {
     if (t.getHandlerFunction() === 'runLoggingSelfTest') ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('runLoggingSelfTest').timeBased().everyDays(1).atHour(7).create();
+}
+
+// ============================================================
+// Usage reporting — who's using the tool and how often.
+//
+// Run buildUsageSummary() any time, or let the weekly trigger refresh it.
+// It writes a "Usage Summary" tab to this spreadsheet: one block per person,
+// one per month, and a list of open feedback. Reading the raw response rows
+// isn't reporting; this is.
+// ============================================================
+
+function buildUsageSummary() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const responses = findResponsesSheet_(ss);
+  if (!responses) throw new Error('No form-responses tab found in this spreadsheet.');
+
+  const values = responses.getDataRange().getValues();
+  if (values.length < 2) {
+    Logger.log('No responses logged yet.');
+    return;
+  }
+
+  const header = values[0].map(function (h) { return String(h).trim(); });
+  const col = {};
+  header.forEach(function (h, i) { col[h] = i; });
+
+  const people = {};      // who -> {conversions, files, lastUsed, banks:{}, errors}
+  const months = {};      // YYYY-MM -> {conversions, people:{}}
+  const feedback = [];
+
+  for (let r = 1; r < values.length; r++) {
+    const row = values[r];
+    const when = row[0] instanceof Date ? row[0] : new Date(row[0]);
+    const type = String(row[col.eventType] || '');
+    const who = String(row[col.userEmail] || '').trim() || '(not identified)';
+
+    if (type === 'selftest') continue;   // the monitor's own heartbeat rows
+
+    if (type === 'conversion') {
+      const p = people[who] || (people[who] = { conversions: 0, lastUsed: null, banks: {}, errors: 0 });
+      p.conversions++;
+      if (!p.lastUsed || when > p.lastUsed) p.lastUsed = when;
+      const bank = String(row[col.issuer] || 'unknown');
+      p.banks[bank] = (p.banks[bank] || 0) + 1;
+      if (String(row[col.status] || '') !== 'success') p.errors++;
+
+      const key = Utilities.formatDate(when, Session.getScriptTimeZone(), 'yyyy-MM');
+      const m = months[key] || (months[key] = { conversions: 0, people: {} });
+      m.conversions++;
+      m.people[who] = true;
+    }
+
+    if (type === 'error') {
+      const p = people[who] || (people[who] = { conversions: 0, lastUsed: null, banks: {}, errors: 0 });
+      p.errors++;
+    }
+
+    if (type === 'bug_report' || type.indexOf('feedback_') === 0) {
+      feedback.push([
+        when,
+        type === 'bug_report' ? 'Problem' : type.replace('feedback_', ''),
+        who,
+        String(row[col.orgId] || ''),
+        String(row[col.bankReported] || row[col.issuer] || ''),
+        String(row[col.userNote] || '').slice(0, 500)
+      ]);
+    }
+  }
+
+  const out = [];
+  out.push(['PDF to CSV Converter — usage summary']);
+  out.push(['Generated', new Date()]);
+  out.push([]);
+
+  out.push(['BY PERSON']);
+  out.push(['Person', 'Conversions', 'Last used', 'Problems', 'Banks used']);
+  Object.keys(people)
+    .sort(function (a, b) { return people[b].conversions - people[a].conversions; })
+    .forEach(function (who) {
+      const p = people[who];
+      const banks = Object.keys(p.banks)
+        .sort(function (a, b) { return p.banks[b] - p.banks[a]; })
+        .map(function (b) { return b + ' (' + p.banks[b] + ')'; })
+        .join(', ');
+      out.push([who, p.conversions, p.lastUsed, p.errors, banks]);
+    });
+  out.push([]);
+
+  out.push(['BY MONTH']);
+  out.push(['Month', 'Conversions', 'People who used it']);
+  Object.keys(months).sort().forEach(function (key) {
+    out.push([key, months[key].conversions, Object.keys(months[key].people).length]);
+  });
+  out.push([]);
+
+  out.push(['FEEDBACK AND PROBLEMS']);
+  out.push(['When', 'Kind', 'From', 'Org ID', 'Bank', 'What they said']);
+  feedback.sort(function (a, b) { return b[0] - a[0]; }).forEach(function (f) { out.push(f); });
+
+  writeSummarySheet_(ss, out);
+  Logger.log('Usage summary rebuilt: ' + Object.keys(people).length + ' people, ' + feedback.length + ' feedback items.');
+}
+
+// The form's own tab is whichever one carries the questions as headers.
+function findResponsesSheet_(ss) {
+  const sheets = ss.getSheets();
+  for (let i = 0; i < sheets.length; i++) {
+    const first = sheets[i].getRange(1, 1, 1, sheets[i].getLastColumn() || 1).getValues()[0];
+    if (first.indexOf('eventType') !== -1 && first.indexOf('userEmail') !== -1) return sheets[i];
+  }
+  return null;
+}
+
+// Rewrites only the summary tab. Never touches the response data.
+function writeSummarySheet_(ss, rows) {
+  let sheet = ss.getSheetByName('Usage Summary');
+  if (!sheet) sheet = ss.insertSheet('Usage Summary');
+  sheet.clear();
+
+  const width = rows.reduce(function (w, r) { return Math.max(w, r.length); }, 1);
+  const padded = rows.map(function (r) {
+    const copy = r.slice();
+    while (copy.length < width) copy.push('');
+    return copy;
+  });
+
+  sheet.getRange(1, 1, padded.length, width).setValues(padded);
+  sheet.getRange(1, 1, 1, width).setFontWeight('bold').setFontSize(12);
+  padded.forEach(function (r, i) {
+    const label = String(r[0]);
+    if (label === 'BY PERSON' || label === 'BY MONTH' || label === 'FEEDBACK AND PROBLEMS') {
+      sheet.getRange(i + 1, 1, 1, width).setFontWeight('bold').setBackground('#F0ECE2');
+    }
+  });
+  sheet.setFrozenRows(2);
+  for (let c = 1; c <= width; c++) sheet.autoResizeColumn(c);
+}
+
+function installWeeklySummary_() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'buildUsageSummary') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('buildUsageSummary').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(6).create();
 }
 
 function onLoggingFormSubmit(e) {
