@@ -1520,7 +1520,7 @@ function renderResults(){
       </div>
       ${checkLine(d.check)}
       ${it.issuer === 'unknown'
-        ? `<div class="unknown-note"><strong>This bank isn't specifically supported yet.</strong> These rows came from the general-purpose parser, which reads layout rather than this bank's own format — treat them as a draft and check them against the statement before importing. If anything's off, use “Report a bug” above and mention the bank.</div>`
+        ? `<div class="unknown-note"><strong>This bank isn't specifically supported yet.</strong> These rows came from the general-purpose parser, which reads layout rather than this bank's own format — treat them as a draft and check them against the statement before importing. If anything's off, use the “Feedback” button above and name the bank.</div>`
         : ''}
       <div class="grid3">
         <div class="stat"><div class="label">Account</div><div class="value">${escapeHtml(d.accountNumber || '—')}</div></div>
