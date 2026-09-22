@@ -53,6 +53,14 @@ numbers make the logic impossible to verify.
 
 ### The recurring trap: which rows are credits
 
+For an unrecognised bank this is now handled generically:
+`chooseSignConvention` applies each known convention in turn and keeps whichever
+one reconciles. So a new bank often needs no sign logic written at all — check
+whether the generic parser already lands on `Balances` before writing one.
+
+The per-bank conventions below still matter for the dedicated parsers, and for
+understanding why a statement won't balance.
+
 Most of the work is sign, not extraction. Issuers disagree on how they mark a
 credit, and the useful marker often doesn't survive PDF extraction:
 
@@ -74,9 +82,22 @@ Before assuming a per-row marker exists, check the raw text for it.
 
 ### Verifying
 
-Statements state their own totals. Sum the parsed transactions and compare. If
-the statement says the new balance is 4,210.55, your rows should agree. That
-catches sign errors and missed rows, which are the two failures that matter.
+This is now automatic. `reconcile()` runs on every statement, whatever the bank,
+and checks the one identity every statement obeys:
+
+    previous balance + everything that happened = new balance
+
+It reads both balances with generic vocabulary (`extractStatedTotals`), sums the
+parsed rows, and compares. The result shows on the result card and is recorded
+in the log as `success`, `success_unverified` or `does_not_balance`, so a parser
+that quietly breaks surfaces in the weekly report rather than downstream in
+someone's books.
+
+A near-exact mirror image is reported as reversed signs specifically, because
+that's the most common failure and the least obvious.
+
+When adding a parser, get it to `Balances` on a real statement. That's a much
+stronger signal than eyeballing the table.
 
 Test the neighbours too — a change to the shared helpers (`splitVendorDescription`,
 `fixGluedPhrases`, `resolveTransactionYear`) affects every bank.

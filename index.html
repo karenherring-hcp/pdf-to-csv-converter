@@ -292,6 +292,18 @@
     color:var(--ink);
   }
   .unknown-note strong{font-weight:600;}
+  .checkline{
+    padding:10px 18px;
+    font-size:12.5px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    gap:8px;
+    align-items:baseline;
+  }
+  .checkline .badge{font-weight:600;flex:none;}
+  .checkline.ok{background:var(--green-bg);color:var(--green);}
+  .checkline.off{background:var(--red-bg);color:var(--red);}
+  .checkline.unchecked{background:var(--stripe);color:var(--ink-soft);}
   footer.foot{
     margin-top:56px;
     padding-top:20px;
@@ -693,12 +705,26 @@ async function processFile(file, id){
     const issuer = detectIssuer(text.replace(/\s+/g,' '));
     item.issuer = issuer;
     const txCount = item.data.transactions.length;
+    // Record whether it balanced, so a parser that quietly breaks — a changed
+    // layout, an unfamiliar product from a known bank — shows up in the report
+    // instead of waiting for somebody to notice bad numbers downstream.
+    const check = item.data.check || {};
+    let status, message;
+    if (txCount === 0) {
+      status = 'zero_transactions';
+      message = 'Parsed with 0 transactions found — check statement format';
+    } else if (check.verdict === 'off') {
+      status = 'does_not_balance';
+      message = 'Extracted ' + txCount + ' rows but they don\'t reconcile: ' + (check.reason || '');
+    } else {
+      status = check.verdict === 'ok' ? 'success' : 'success_unverified';
+      message = check.verdict === 'ok' ? '' : (check.reason || 'No balances available to check against');
+    }
     logEvent({
       eventType: 'conversion',
       issuer, fileName: file.name,
       transactionCount: txCount,
-      status: txCount > 0 ? 'success' : 'zero_transactions',
-      message: txCount > 0 ? '' : 'Parsed with 0 transactions found — check statement format'
+      status, message
     });
   } catch(err){
     const item = items.find(i => i.id === id);
@@ -836,6 +862,113 @@ function splitVendorDescription(text){
 // across most issuers, even when the exact label wording differs.
 const SUMMARY_KEYWORDS = /\b(previous balance|new balance|total balance|current balance|current due|past due|minimum payment|credit limit|available credit|available cash|cash advance limit|annual percentage|apr|daily periodic|finance charge summary|balance subject|year to date|life to date|days in billing|billing period|closing date|due date|payments\/credits|new standard|payment terms charges|total payments|total fees|total interest|total new charges|account summary|rewards points|total available)\b/i;
 
+// ============================================================
+// Self-checking, and the things that are true of every statement
+//
+// Whatever the bank and whatever the layout, one identity always holds:
+//
+//     previous balance + everything that happened = new balance
+//
+// Nearly every statement prints both balances, which means the tool can check
+// its own extraction against the statement's own arithmetic — on a bank it has
+// never seen, with no knowledge of that bank's layout. That's worth far more
+// than another hand-written parser: it turns a silent wrong answer into a
+// visible one.
+//
+// It also settles the hardest part of reading an unfamiliar statement. Issuers
+// mark credits in at least five different ways and the marker often doesn't
+// survive PDF extraction, so rather than guess, the generic parser tries each
+// convention and keeps whichever one balances.
+// ============================================================
+
+// Statements label these a dozen different ways; match on the vocabulary they
+// have in common rather than any one bank's phrasing.
+function extractStatedTotals(clean){
+  const money = '\\$?\\s*(-?[\\d,]+\\.\\d{2})';
+  const first = (patterns) => {
+    for (const p of patterns){
+      const m = clean.match(new RegExp(p, 'i'));
+      if (m) { const v = parseFloat(m[1].replace(/,/g,'')); if (!isNaN(v)) return v; }
+    }
+    return null;
+  };
+  return {
+    previous: first([
+      'Previous\\s*Balance[^\\d$-]{0,20}' + money,
+      'Beginning\\s*Balance[^\\d$-]{0,20}' + money,
+      'Balance\\s*Forward[^\\d$-]{0,20}' + money,
+      'Opening\\s*Balance[^\\d$-]{0,20}' + money
+    ]),
+    ending: first([
+      'New\\s*Balance[^\\d$-]{0,20}' + money,
+      'Ending\\s*Balance[^\\d$-]{0,20}' + money,
+      'Closing\\s*Balance[^\\d$-]{0,20}' + money,
+      'Statement\\s*Balance[^\\d$-]{0,20}' + money
+    ])
+  };
+}
+
+function sumAmounts(transactions){
+  return transactions.reduce((total, t) => {
+    const v = parseFloat(String(t.amount).replace(/,/g,''));
+    return isNaN(v) ? total : total + v;
+  }, 0);
+}
+
+// Does what we extracted actually get from the opening balance to the closing
+// one? Tolerance is a cent per row, to absorb rounding rather than real errors.
+function reconcile(transactions, totals){
+  if (totals.previous === null || totals.ending === null) {
+    return { verdict: 'unchecked', reason: 'The statement doesn\'t show both an opening and closing balance.' };
+  }
+  const expected = totals.ending - totals.previous;
+  const actual = sumAmounts(transactions);
+  const drift = Math.abs(expected - actual);
+  const tolerance = Math.max(0.05, transactions.length * 0.01);
+
+  // A sign convention read backwards shows up as a near-exact mirror image.
+  if (drift > tolerance && Math.abs(expected + actual) <= tolerance) {
+    return { verdict: 'off', drift, expected, actual, reason: 'Charges and credits look reversed.' };
+  }
+  if (drift > tolerance) {
+    return { verdict: 'off', drift, expected, actual,
+             reason: 'The transactions add up to ' + actual.toFixed(2) + ', but the statement\'s balances move by ' + expected.toFixed(2) + '.' };
+  }
+  return { verdict: 'ok', drift, expected, actual };
+}
+
+// The five ways issuers express a credit. Applied to rows the extractor has
+// already found, so this only decides sign, never what counts as a row.
+const SIGN_STRATEGIES = [
+  { name: 'as-marked',        apply: rows => rows.map(r => ({ ...r, amount: r.marked })) },
+  { name: 'flipped',          apply: rows => rows.map(r => ({ ...r, amount: flipSign(r.marked) })) },
+  { name: 'credit-keywords',  apply: rows => rows.map(r => ({ ...r, amount: CREDIT_WORDS.test(r.vendor + ' ' + r.description) ? negative(r.marked) : positive(r.marked) })) },
+  { name: 'charges-positive', apply: rows => rows.map(r => ({ ...r, amount: CREDIT_WORDS.test(r.vendor + ' ' + r.description) ? negative(r.marked) : positive(r.marked) })) },
+  { name: 'all-negative',     apply: rows => rows.map(r => ({ ...r, amount: negative(r.marked) })) }
+];
+
+const CREDIT_WORDS = /\b(payment|credit|refund|reversal|rebate|deposit|transfer\s*in|returned|adjustment)\b/i;
+
+function flipSign(v){ return String(v).startsWith('-') ? String(v).slice(1) : '-' + v; }
+function negative(v){ const s = String(v); return s.startsWith('-') ? s : '-' + s; }
+function positive(v){ const s = String(v); return s.startsWith('-') ? s.slice(1) : s; }
+
+// Try each convention, keep the one that balances. If none do, fall back to
+// what the statement appeared to mark, and let the check flag it.
+function chooseSignConvention(rows, totals){
+  if (totals.previous === null || totals.ending === null) {
+    return { transactions: rows.map(r => ({ ...r, amount: r.marked })), strategy: 'as-marked', check: reconcile([], totals) };
+  }
+  let best = null;
+  for (const strategy of SIGN_STRATEGIES){
+    const candidate = strategy.apply(rows);
+    const check = reconcile(candidate, totals);
+    if (check.verdict === 'ok') return { transactions: candidate, strategy: strategy.name, check };
+    if (!best || check.drift < best.check.drift) best = { transactions: candidate, strategy: strategy.name, check };
+  }
+  return best;
+}
+
 function parseGenericStatement(clean){
   const accountNumber = findField(clean, [/Account\s*(?:Number|Ending):?\s*([\d -]{4,25}\d)/i]);
   const dueDateRaw = findField(clean, [/(?:Payment\s*)?Due\s*Date:?\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i]);
@@ -862,13 +995,19 @@ function parseGenericStatement(clean){
       fullDate = normalizeShortDate(m[1]);
     }
     const { vendor, description } = splitVendorDescription(descRaw);
-    const negative = !!m[4] || !!m[6];
+    const isNeg = !!m[4] || !!m[6];
+    // Keep the sign the statement appeared to mark, but don't commit to it —
+    // chooseSignConvention decides once it can test against the balances.
     transactions.push({
       date: fullDate,
       vendor, description,
-      amount: (negative ? '-' : '') + num(m[5])
+      marked: (isNeg ? '-' : '') + num(m[5]),
+      amount: (isNeg ? '-' : '') + num(m[5])
     });
   }
+
+  const totals = extractStatedTotals(clean);
+  const chosen = chooseSignConvention(transactions, totals);
 
   return {
     accountNumber, accountName: '',
@@ -877,7 +1016,8 @@ function parseGenericStatement(clean){
     currentDue:'', pastDue:'', minPayment, dueDate: normalizeShortDate(dueDateRaw),
     creditLimit:'', creditAvailable:'', closingDate: normalizeShortDate(closingRaw), nextClosingDate:'', daysInPeriod:'',
     apr:'', balanceSubject:'', ytd:'', ltd:'',
-    transactions
+    transactions: chosen.transactions.map(({ marked, ...t }) => t),
+    signStrategy: chosen.strategy
   };
 }
 
@@ -1174,14 +1314,22 @@ function parseNFCUStatement(rawText){
 function parseStatement(text){
   const clean = text.replace(/\s+/g,' ');
   const issuer = detectIssuer(clean);
-  if (issuer === 'amex') return parseAmexStatement(clean);
-  if (issuer === 'homedepot') return parseHomeDepotStatement(clean);
-  if (issuer === 'chase') return parseChaseStatement(clean);
-  if (issuer === 'usbank') return parseUSBankStatement(clean);
-  if (issuer === 'truist') return parseTruistStatement(text);
-  if (issuer === 'woodforest') return parseWoodforestStatement(text);
-  if (issuer === 'nfcu') return parseNFCUStatement(text);
-  return parseGenericStatement(clean);
+  let data;
+  if (issuer === 'amex') data = parseAmexStatement(clean);
+  else if (issuer === 'homedepot') data = parseHomeDepotStatement(clean);
+  else if (issuer === 'chase') data = parseChaseStatement(clean);
+  else if (issuer === 'usbank') data = parseUSBankStatement(clean);
+  else if (issuer === 'truist') data = parseTruistStatement(text);
+  else if (issuer === 'woodforest') data = parseWoodforestStatement(text);
+  else if (issuer === 'nfcu') data = parseNFCUStatement(text);
+  else data = parseGenericStatement(clean);
+
+  // Run the arithmetic check on every bank, not just unknown ones. A recognised
+  // bank can still be wrong — a statement from a different product, or a layout
+  // the issuer has since changed — and that's the case least likely to be
+  // noticed, because nothing on screen currently suggests doubt.
+  data.check = reconcile(data.transactions, extractStatedTotals(clean));
+  return data;
 }
 
 function parseAmexStatement(clean){
@@ -1313,6 +1461,21 @@ function money(v){
   return (n < 0 ? '-$' : '$') + Math.abs(n).toFixed(2);
 }
 
+// The self-check, stated in terms of what the user should do about it.
+function checkLine(check){
+  if (!check) return '';
+  if (check.verdict === 'ok') {
+    return `<div class="checkline ok"><span class="badge">Balances</span>
+      <span>The transactions below add up to the change between this statement's own opening and closing balance.</span></div>`;
+  }
+  if (check.verdict === 'off') {
+    return `<div class="checkline off"><span class="badge">Doesn't balance</span>
+      <span>${escapeHtml(check.reason)} Something is missing or misread — check against the statement before importing.</span></div>`;
+  }
+  return `<div class="checkline unchecked"><span class="badge">Not verified</span>
+    <span>${escapeHtml(check.reason || 'Couldn\'t find balances to check against.')} Worth a quick look before importing.</span></div>`;
+}
+
 function renderResults(){
   const ok = items.filter(i => i.status === 'ok');
   resultsSection.style.display = ok.length ? 'block' : 'none';
@@ -1355,6 +1518,7 @@ function renderResults(){
           <button class="secondary rawtext" data-id="${it.id}" style="padding:6px 12px;font-size:12px;">Raw text</button>
         </div>
       </div>
+      ${checkLine(d.check)}
       ${it.issuer === 'unknown'
         ? `<div class="unknown-note"><strong>This bank isn't specifically supported yet.</strong> These rows came from the general-purpose parser, which reads layout rather than this bank's own format — treat them as a draft and check them against the statement before importing. If anything's off, use “Report a bug” above and mention the bank.</div>`
         : ''}
