@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How to use PDF to CSV Converter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F6F3EC; --card:#FFFFFF; --ink:#241F1A; --ink-soft:#6B6459;
+    --line:#DEDACE; --line-strong:#C7C1B2; --orange:#F96302; --orange-dark:#B84800;
+    --green:#2F6F4E; --green-bg:#E7F1EA; --red:#B3261E; --red-bg:#FBEAE9; --stripe:#F0ECE2;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'IBM Plex Sans',sans-serif;-webkit-font-smoothing:antialiased;line-height:1.6;}
+  .wrap{max-width:760px;margin:0 auto;padding:56px 24px 96px;}
+  header.top{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:40px;border-bottom:2px solid var(--ink);padding-bottom:16px;flex-wrap:wrap;gap:12px;}
+  header.top .mark{font-weight:600;font-size:15px;letter-spacing:0.02em;}
+  header.top .mark span{color:var(--orange);}
+  header.top a{font-size:13px;color:var(--orange-dark);font-weight:500;}
+  h1{font-size:32px;font-weight:600;line-height:1.2;margin:0 0 10px;}
+  p.lede{font-size:16px;color:var(--ink-soft);margin:0 0 36px;max-width:58ch;}
+  h2{font-size:19px;font-weight:600;margin:40px 0 12px;padding-top:20px;border-top:1px solid var(--line);}
+  h2:first-of-type{border-top:none;padding-top:0;}
+  h3{font-size:15px;font-weight:600;margin:24px 0 6px;}
+  p,li{font-size:15px;}
+  ol,ul{padding-left:22px;}
+  li{margin-bottom:8px;}
+  a{color:var(--orange-dark);}
+  .cta{display:inline-block;background:var(--orange);color:#fff;text-decoration:none;padding:12px 22px;border-radius:4px;font-weight:500;font-size:15px;margin:4px 0 8px;}
+  .cta:hover{background:var(--orange-dark);color:#fff;}
+  .callout{border-radius:4px;padding:14px 18px;margin:18px 0;font-size:14.5px;}
+  .callout.ok{background:var(--green-bg);border:1px solid #BFD9CB;}
+  .callout.warn{background:var(--red-bg);border:1px solid #EDC2BF;}
+  .callout.note{background:var(--stripe);border:1px solid var(--line-strong);}
+  .callout strong{font-weight:600;}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px;}
+  th{text-align:left;font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:var(--ink-soft);padding:8px 12px;border-bottom:1px solid var(--line-strong);}
+  td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
+  .badge{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:3px;white-space:nowrap;}
+  .badge.ok{background:var(--green-bg);color:var(--green);}
+  .badge.off{background:var(--red-bg);color:var(--red);}
+  .badge.grey{background:var(--stripe);color:var(--ink-soft);}
+  footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-soft);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="mark">PDF<span>&rarr;</span>CSV</div>
+    <a href="./">Open the converter &rarr;</a>
+  </header>
+
+  <h1>How to use the PDF to CSV Converter</h1>
+  <p class="lede">Turns bank and credit card statement PDFs into spreadsheet files you can import, without retyping anything.</p>
+
+  <a class="cta" href="./">Open the converter</a>
+  <p style="font-size:14px;color:var(--ink-soft);margin-top:4px;">No login, nothing to install. Works in any browser.</p>
+
+  <h2>Your statements are never uploaded</h2>
+  <p>The conversion happens inside your own browser. The PDF is read on your computer and the spreadsheet is created there too. The statement file itself never goes to a server, so client financial data doesn't leave your machine.</p>
+  <p>What <em>is</em> recorded: your name, the bank detected, the file name, how many transactions were found, and whether it worked. That's used to see which banks the team actually needs and to follow up when something breaks.</p>
+
+  <h2>Step by step</h2>
+  <ol>
+    <li><strong>Open the converter</strong> and drag your statement PDFs onto the drop area, or click to browse.</li>
+    <li><strong>Add as many as you like</strong> — one file or fifteen. Each one's bank is worked out separately, so you can mix banks in the same batch.</li>
+    <li><strong>Check the result</strong> for each statement on screen before you download. See the next section.</li>
+    <li><strong>Download.</strong> With several statements you choose between one combined file and separate files.</li>
+    <li><strong>Enter your name</strong> the first time you download. It's remembered on that computer and you won't be asked again.</li>
+  </ol>
+
+  <h3>Which download should I pick?</h3>
+  <table>
+    <tr><th>Option</th><th>When to use it</th></tr>
+    <tr><td><strong>One combined CSV</strong></td><td>Usually this one. Every transaction from every statement in a single file, so it imports in one pass.</td></tr>
+    <tr><td><strong>Separate CSV per statement</strong></td><td>When each statement has to stay on its own. You get a .zip with one file per statement, named after the PDF it came from.</td></tr>
+  </table>
+  <p>With a single statement loaded there's no choice to make — just a Download CSV button.</p>
+
+  <h2>Always read the coloured line</h2>
+  <p>Every statement gets a check. The tool adds up the transactions it found and compares that against the opening and closing balances printed on the statement itself. This is the most important thing on the page.</p>
+  <table>
+    <tr><th>What you see</th><th>What it means</th><th>What to do</th></tr>
+    <tr>
+      <td><span class="badge ok">Balances</span></td>
+      <td>The transactions add up to the change between the statement's own opening and closing balance.</td>
+      <td>Good to import.</td>
+    </tr>
+    <tr>
+      <td><span class="badge off">Doesn't balance</span></td>
+      <td>Something is missing or misread — often a transaction that wasn't picked up, or a credit read as a charge.</td>
+      <td><strong>Don't import as-is.</strong> Check against the statement, and send feedback.</td>
+    </tr>
+    <tr>
+      <td><span class="badge grey">Not verified</span></td>
+      <td>The statement doesn't print both balances, so there's nothing to check against. Not a fault — just unconfirmed.</td>
+      <td>Give it a quick look before importing.</td>
+    </tr>
+  </table>
+
+  <div class="callout warn">
+    <strong>If a card says the bank isn't specifically supported</strong>, those rows came from the general-purpose reader, which works off layout rather than that bank's own format. Treat them as a draft, check them, and send feedback naming the bank so a proper reader can be built.
+  </div>
+
+  <h2>Which banks work well</h2>
+  <p>These have been built and tested specifically:</p>
+  <ul>
+    <li>Home Depot Pro Xtra</li>
+    <li>Amazon Business / American Express</li>
+    <li>Chase business checking</li>
+    <li>U.S. Bank Business Platinum card</li>
+    <li>Truist</li>
+    <li>Woodforest National Bank</li>
+    <li>Navy Federal Credit Union</li>
+    <li>Wells Fargo checking</li>
+  </ul>
+  <p>Anything else still gets a go from the general reader — it just needs checking. Known not to work well yet: Capital One, Capital One Spark, Discover, ordinary American Express, and Wells Fargo credit cards.</p>
+
+  <div class="callout note">
+    <strong>Worth knowing:</strong> a bank appearing above doesn't mean every statement from that bank works. Each was built from one product — the Chase reader expects business <em>checking</em>, not a Chase credit card. The coloured line is what tells you whether this particular statement came out right.
+  </div>
+
+  <h2>Spot-check these two</h2>
+  <p>Even when a statement balances, two readers are worth a glance:</p>
+  <ul>
+    <li><strong>U.S. Bank</strong> — credits are identified from wording like "payment", "credit" or "refund". An unusually described refund could come through as a charge.</li>
+    <li><strong>Navy Federal</strong> — rows are rebuilt from two separate pieces of each page. The point where one account ends and the next begins is the messiest part.</li>
+  </ul>
+
+  <h2>Sending feedback</h2>
+  <p>Use the <strong>Feedback</strong> button at the top of the converter. There are three kinds:</p>
+  <ul>
+    <li><strong>Something's wrong</strong> — asks for the Pro Org ID and the bank, so the statement can be pulled up and the problem reproduced.</li>
+    <li><strong>Suggestion</strong> — another bank, a different column, anything. No Org ID needed.</li>
+    <li><strong>It's working well</strong> — genuinely useful, and it's what justifies building more of these.</li>
+  </ul>
+
+  <div class="callout warn">
+    <strong>Please don't paste statement contents into the feedback box.</strong> The Org ID and bank are enough to look it up. If the detail really is needed, someone will ask you for it.
+  </div>
+
+  <h3>If you're asked for the "raw text"</h3>
+  <p>Each result card has a <strong>Raw text</strong> button. It downloads exactly what was read out of the PDF, as a plain text file you can open and edit. If you're asked for one, open it first and remove account numbers and client names before sending it — but leave the dates and amounts alone, because some banks' charges and credits can only be worked out from the running balance.</p>
+
+  <h2>Common questions</h2>
+  <h3>It found 0 transactions.</h3>
+  <p>Usually a scanned or photographed statement — there's no text in the file to read, only a picture. Download the PDF directly from the bank rather than scanning a printout.</p>
+
+  <h3>The numbers are positive when they should be negative.</h3>
+  <p>A known failure with unsupported banks. Send feedback with the bank name; that's a fixable bug, not something you need to work around by hand.</p>
+
+  <h3>Can I use this on my phone?</h3>
+  <p>It will open and work, but reviewing a long transaction table is much easier on a computer.</p>
+
+  <h3>Do I need a Claude licence or a Google account?</h3>
+  <p>No. Neither. Just a browser.</p>
+
+  <footer>
+    Questions, or a bank you need adding: use the Feedback button in the converter, or contact Karen Herring.
+  </footer>
+</div>
+</body>
+</html>
