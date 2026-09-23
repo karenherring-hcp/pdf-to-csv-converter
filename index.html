@@ -1623,7 +1623,7 @@ function money(v){
 // in a page anyone can view.
 // ============================================================
 function aiAvailable(){
-  return typeof google !== 'undefined' && google.script && google.script.run;
+  return !!(typeof google !== 'undefined' && google.script && google.script.run);
 }
 
 function runAiExtraction(id){
@@ -1687,7 +1687,13 @@ function applyAiResult(item, result){
 function aiPanel(it){
   if (!aiAvailable()) return '';
   const check = (it.data && it.data.check) || {};
-  const worthOffering = it.issuer === 'unknown' || check.verdict === 'off' || it.data.transactions.length === 0;
+  // Only where it would actually help. A statement that reconciles is already
+  // right, whether or not the bank was recognised — re-reading it with AI could
+  // only make it worse, and would send the text off the machine for nothing.
+  const worthOffering =
+    it.data.transactions.length === 0 ||
+    check.verdict === 'off' ||
+    (it.issuer === 'unknown' && check.verdict !== 'ok');
   if (!worthOffering && it.aiState !== 'done') return '';
 
   if (it.aiState === 'working'){
