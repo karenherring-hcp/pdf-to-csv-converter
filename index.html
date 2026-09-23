@@ -665,6 +665,18 @@ function renderWhoButton(){
 }
 
 function logEvent(payload){
+  // Served from Apps Script: log straight to the Sheet as the signed-in user.
+  // Reliable, and a failure actually surfaces — unlike the form POST below,
+  // whose response the browser hides from us.
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    try {
+      google.script.run
+        .withFailureHandler(function(){ /* never let logging affect the user */ })
+        .logUsage(payload);
+    } catch (e) { /* ignore */ }
+    return;
+  }
+
   if (!loggingEnabled()) return;
   try {
     // Attach who this is, unless the payload already named someone (a feedback
@@ -1651,7 +1663,7 @@ function runAiExtraction(id){
       item.aiError = (err && err.message) ? err.message : 'Extraction failed.';
       renderResults();
     })
-    .extractTransactionsWithAI(item.rawText);
+    .extractTransactions(item.rawText);
 }
 
 function applyAiResult(item, result){
@@ -1999,7 +2011,7 @@ document.getElementById('bugSubmitBtn').addEventListener('click', () => {
     status: 'reported'
   }, reported));
 
-  const sent = loggingEnabled();
+  const sent = loggingEnabled() || (typeof google !== 'undefined' && google.script && google.script.run);
   bugStatusEl.textContent = sent
     ? (feedbackKind === 'bug'
         ? 'Thanks — your report has been submitted.'
