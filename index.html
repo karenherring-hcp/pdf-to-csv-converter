@@ -1607,6 +1607,109 @@ function money(v){
   return (n < 0 ? '-$' : '$') + Math.abs(n).toFixed(2);
 }
 
+// ============================================================
+// AI extraction (only when this page is served from Apps Script)
+//
+// The hand-written parsers stay in front: exact, instant, free, and identical
+// every run. This is the fallback for what they can't read — an unrecognised
+// bank, or a recognised one whose output doesn't reconcile.
+//
+// Deliberately a button rather than automatic. It is the only path where the
+// statement's text leaves the browser, so it takes a human decision each time,
+// and the tool's default promise holds for everyone who doesn't press it.
+//
+// Unavailable on the plain GitHub Pages copy: a static page cannot read a
+// reply back from Apps Script (no CORS headers), and an API key can never live
+// in a page anyone can view.
+// ============================================================
+function aiAvailable(){
+  return typeof google !== 'undefined' && google.script && google.script.run;
+}
+
+function runAiExtraction(id){
+  const item = items.find(i => i.id === id);
+  if (!item || !aiAvailable()) return;
+
+  item.aiState = 'working';
+  renderResults();
+
+  google.script.run
+    .withSuccessHandler(result => {
+      if (!result || !result.ok){
+        item.aiState = 'failed';
+        item.aiError = (result && result.error) || 'Extraction failed.';
+        renderResults();
+        logEvent({ eventType: 'error', issuer: item.issuer, fileName: item.name,
+                   status: 'ai_failed', message: item.aiError });
+        return;
+      }
+      applyAiResult(item, result);
+      renderResults();
+    })
+    .withFailureHandler(err => {
+      item.aiState = 'failed';
+      item.aiError = (err && err.message) ? err.message : 'Extraction failed.';
+      renderResults();
+    })
+    .extractTransactionsWithAI(item.rawText);
+}
+
+function applyAiResult(item, result){
+  const d = result.data || {};
+  const rows = (d.transactions || []).map(t => ({
+    date: String(t.date || ''),
+    vendor: String(t.vendor || ''),
+    description: String(t.description || ''),
+    amount: (typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0).toFixed(2)
+  }));
+
+  item.data.transactions = rows;
+  item.aiState = 'done';
+  item.aiModel = result.model;
+  item.aiTruncated = !!result.truncated;
+
+  // Hold the AI result to exactly the same standard as a hand-written parser.
+  // Getting a confident-looking table back is not evidence it is right.
+  const totals = {
+    previous: (typeof d.previousBalance === 'number') ? d.previousBalance : null,
+    ending: (typeof d.newBalance === 'number') ? d.newBalance : null
+  };
+  item.data.check = reconcile(rows, totals);
+
+  logEvent({
+    eventType: 'conversion', issuer: item.issuer, fileName: item.name,
+    transactionCount: rows.length,
+    status: item.data.check.verdict === 'ok' ? 'ai_success' : 'ai_unverified',
+    message: 'AI extraction (' + (result.model || '') + '), check: ' + item.data.check.verdict
+  });
+}
+
+function aiPanel(it){
+  if (!aiAvailable()) return '';
+  const check = (it.data && it.data.check) || {};
+  const worthOffering = it.issuer === 'unknown' || check.verdict === 'off' || it.data.transactions.length === 0;
+  if (!worthOffering && it.aiState !== 'done') return '';
+
+  if (it.aiState === 'working'){
+    return `<div class="checkline unchecked"><span class="badge">Reading…</span>
+      <span>Sending this statement's text for a second attempt. This takes a few seconds.</span></div>`;
+  }
+  if (it.aiState === 'failed'){
+    return `<div class="checkline off"><span class="badge">Second attempt failed</span>
+      <span>${escapeHtml(it.aiError || '')}</span></div>`;
+  }
+  if (it.aiState === 'done'){
+    return `<div class="checkline unchecked"><span class="badge">Read by AI</span>
+      <span>These rows came from an AI reading of the statement${it.aiTruncated ? ', which was long enough to be trimmed' : ''}. The balance check above still applies — don't import rows that don't balance.</span></div>`;
+  }
+  return `<div class="checkline unchecked">
+    <span class="badge">Try again with AI</span>
+    <span>This statement can be re-read by an AI service, which handles layouts no parser knows.
+    <strong>This sends the statement's text off your computer</strong> — the only part of this tool that does.
+    <button class="secondary aibtn" data-id="${it.id}" style="padding:5px 11px;font-size:12px;margin-left:8px;">Read it with AI</button></span>
+  </div>`;
+}
+
 // The self-check, stated in terms of what the user should do about it.
 function checkLine(check){
   if (!check) return '';
@@ -1665,6 +1768,7 @@ function renderResults(){
         </div>
       </div>
       ${checkLine(d.check)}
+      ${aiPanel(it)}
       ${it.issuer === 'unknown'
         ? `<div class="unknown-note"><strong>This bank isn't specifically supported yet.</strong> These rows came from the general-purpose parser, which reads layout rather than this bank's own format — treat them as a draft and check them against the statement before importing. If anything's off, use the “Feedback” button above and name the bank.</div>`
         : ''}
@@ -1678,6 +1782,10 @@ function renderResults(){
         : `<div class="empty-note">No line-item transactions detected on this statement.</div>`}
     </div>`;
   }).join('');
+
+  cardsEl.querySelectorAll('.aibtn').forEach(btn => {
+    btn.addEventListener('click', () => runAiExtraction(Number(btn.dataset.id)));
+  });
 
   cardsEl.querySelectorAll('.rawtext').forEach(btn => {
     btn.addEventListener('click', () => {
