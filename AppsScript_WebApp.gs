@@ -184,7 +184,10 @@ function listGeminiModels() {
 // PDF — the PDF file itself never leaves the user's machine.
 function extractTransactions(statementText) {
   const key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
-  if (!key) return { ok: false, error: 'No API key configured yet.' };
+  // No key provisioned yet. This is a switched-off feature, not a failure, so
+  // say which — the page stays quiet rather than reporting an error on every
+  // statement.
+  if (!key) return { ok: false, disabled: true, error: 'AI cross-check is not switched on yet.' };
   if (!statementText || statementText.length < 40) return { ok: false, error: 'Nothing to read.' };
 
   const MAX_CHARS = 60000;

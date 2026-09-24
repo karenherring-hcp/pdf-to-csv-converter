@@ -1817,9 +1817,10 @@ function aiAvailable(){
 // simultaneous calls at the backend.
 const aiQueue = [];
 let aiBusy = false;
+let aiDisabled = false;   // set once the backend says the feature is off
 
 function queueAiCrossCheck(id){
-  if (!aiAvailable()) return;
+  if (!aiAvailable() || aiDisabled) return;
   aiQueue.push(id);
   drainAiQueue();
 }
@@ -1838,7 +1839,13 @@ function drainAiQueue(){
 
   google.script.run
     .withSuccessHandler(result => {
-      if (!result || !result.ok){
+      if (result && result.disabled){
+        // Feature isn't switched on. Don't queue any more, and show nothing —
+        // a switched-off feature must not look like a broken statement.
+        aiDisabled = true;
+        aiQueue.length = 0;
+        item.aiState = null;
+      } else if (!result || !result.ok){
         item.aiState = 'failed';
         item.aiError = (result && result.error) || 'AI read failed.';
         logEvent({ eventType: 'error', issuer: item.issuer, fileName: item.name,
