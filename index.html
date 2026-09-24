@@ -714,6 +714,8 @@ async function processFile(file, id){
     const item = items.find(i => i.id === id);
     item.rawText = text;
     item.data = parseStatement(text);
+    item.parserRows = item.data.transactions.slice();
+    item.source = 'parser';
     item.status = 'ok';
     const issuer = detectIssuer(text.replace(/\s+/g,' '));
     item.issuer = issuer;
@@ -752,6 +754,7 @@ async function processFile(file, id){
   }
   renderQueue();
   renderResults();
+  if (items.find(i => i.id === id && i.status === 'ok')) queueAiCrossCheck(id);
 }
 
 function num(s){
@@ -1620,114 +1623,187 @@ function money(v){
 }
 
 // ============================================================
-// AI extraction (only when this page is served from Apps Script)
+// AI cross-check (only when served from Apps Script)
 //
-// The hand-written parsers stay in front: exact, instant, free, and identical
-// every run. This is the fallback for what they can't read — an unrecognised
-// bank, or a recognised one whose output doesn't reconcile.
+// Every statement is read twice: by the built-in parser where one exists, and
+// independently by the AI. Two methods landing on the same numbers is much
+// stronger evidence than either alone, and a disagreement is exactly the signal
+// worth surfacing — it means one of them misread something.
 //
-// Deliberately a button rather than automatic. It is the only path where the
-// statement's text leaves the browser, so it takes a human decision each time,
-// and the tool's default promise holds for everyone who doesn't press it.
+// The parser's answer stands where there is one. It is deterministic and, for
+// the banks it covers, verified exact against those statements' own totals, so
+// it is not replaced by a probabilistic reading. Where no parser recognises the
+// bank, the AI's answer is used.
 //
-// Unavailable on the plain GitHub Pages copy: a static page cannot read a
-// reply back from Apps Script (no CORS headers), and an API key can never live
-// in a page anyone can view.
+// This sends every statement's extracted text to the AI service. The PDF file
+// itself still never leaves the browser.
+//
+// Unavailable on the plain GitHub Pages copy: a static page cannot read a reply
+// back from Apps Script (no CORS headers), and an API key can never live in a
+// page anyone can view. There, parsers run alone exactly as before.
 // ============================================================
 function aiAvailable(){
   return !!(typeof google !== 'undefined' && google.script && google.script.run);
 }
 
-function runAiExtraction(id){
+// One at a time. A batch of fifteen statements shouldn't fire fifteen
+// simultaneous calls at the backend.
+const aiQueue = [];
+let aiBusy = false;
+
+function queueAiCrossCheck(id){
+  if (!aiAvailable()) return;
+  aiQueue.push(id);
+  drainAiQueue();
+}
+
+function drainAiQueue(){
+  if (aiBusy || !aiQueue.length) return;
+  aiBusy = true;
+  const id = aiQueue.shift();
   const item = items.find(i => i.id === id);
-  if (!item || !aiAvailable()) return;
+  if (!item){ aiBusy = false; drainAiQueue(); return; }
 
   item.aiState = 'working';
   renderResults();
+
+  const done = () => { aiBusy = false; drainAiQueue(); };
 
   google.script.run
     .withSuccessHandler(result => {
       if (!result || !result.ok){
         item.aiState = 'failed';
-        item.aiError = (result && result.error) || 'Extraction failed.';
-        renderResults();
+        item.aiError = (result && result.error) || 'AI read failed.';
         logEvent({ eventType: 'error', issuer: item.issuer, fileName: item.name,
                    status: 'ai_failed', message: item.aiError });
-        return;
+      } else {
+        applyAiResult(item, result);
       }
-      applyAiResult(item, result);
       renderResults();
+      done();
     })
     .withFailureHandler(err => {
       item.aiState = 'failed';
-      item.aiError = (err && err.message) ? err.message : 'Extraction failed.';
+      item.aiError = (err && err.message) ? err.message : 'AI read failed.';
       renderResults();
+      done();
     })
     .extractTransactions(item.rawText);
 }
 
 function applyAiResult(item, result){
   const d = result.data || {};
-  const rows = (d.transactions || []).map(t => ({
+  const aiRows = (d.transactions || []).map(t => ({
     date: String(t.date || ''),
     vendor: String(t.vendor || ''),
     description: String(t.description || ''),
     amount: (typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0).toFixed(2)
   }));
 
-  item.data.transactions = rows;
   item.aiState = 'done';
   item.aiModel = result.model;
   item.aiTruncated = !!result.truncated;
+  item.aiRows = aiRows;
 
-  // Hold the AI result to exactly the same standard as a hand-written parser.
-  // Getting a confident-looking table back is not evidence it is right.
-  const totals = {
-    previous: (typeof d.previousBalance === 'number') ? d.previousBalance : null,
-    ending: (typeof d.newBalance === 'number') ? d.newBalance : null
-  };
-  item.data.check = reconcile(rows, totals);
+  const parserRows = item.parserRows || item.data.transactions;
+  const hadParser = item.issuer !== 'unknown' && parserRows.length > 0;
+
+  item.compare = compareExtractions(parserRows, aiRows);
+
+  // The parser wins where it has an answer; the AI is the second opinion. With
+  // no parser for this bank, the AI's reading is all there is.
+  if (!hadParser){
+    item.data.transactions = aiRows;
+    item.source = 'ai';
+    const totals = {
+      previous: (typeof d.previousBalance === 'number') ? d.previousBalance : null,
+      ending: (typeof d.newBalance === 'number') ? d.newBalance : null
+    };
+    item.data.check = reconcile(aiRows, totals);
+  } else {
+    item.source = 'parser';
+  }
 
   logEvent({
     eventType: 'conversion', issuer: item.issuer, fileName: item.name,
-    transactionCount: rows.length,
-    status: item.data.check.verdict === 'ok' ? 'ai_success' : 'ai_unverified',
-    message: 'AI extraction (' + (result.model || '') + '), check: ' + item.data.check.verdict
+    transactionCount: item.data.transactions.length,
+    status: crossCheckStatus(item),
+    message: 'source=' + item.source + '; ' + describeComparison(item.compare) +
+             '; check=' + ((item.data.check && item.data.check.verdict) || '?') +
+             '; model=' + (result.model || '')
   });
+}
+
+// Compare on the two things that matter for bookkeeping: how many transactions
+// were found, and what they add up to. Descriptions differ harmlessly between
+// the two methods and aren't worth comparing.
+function compareExtractions(parserRows, aiRows){
+  const sum = rows => rows.reduce((t, r) => {
+    const v = parseFloat(String(r.amount).replace(/,/g,''));
+    return isNaN(v) ? t : t + v;
+  }, 0);
+  const parserSum = sum(parserRows), aiSum = sum(aiRows);
+  const countDelta = aiRows.length - parserRows.length;
+  const sumDelta = aiSum - parserSum;
+  return {
+    countDelta, sumDelta,
+    parserCount: parserRows.length, aiCount: aiRows.length,
+    parserSum, aiSum,
+    agree: countDelta === 0 && Math.abs(sumDelta) < 0.02
+  };
+}
+
+function describeComparison(c){
+  if (!c) return 'no comparison';
+  if (c.agree) return 'parser and AI agree';
+  return 'parser ' + c.parserCount + ' rows/' + c.parserSum.toFixed(2) +
+         ' vs AI ' + c.aiCount + ' rows/' + c.aiSum.toFixed(2);
+}
+
+function crossCheckStatus(item){
+  const verdict = (item.data.check && item.data.check.verdict) || 'unchecked';
+  if (item.source === 'ai') return verdict === 'ok' ? 'ai_success' : 'ai_' + verdict;
+  if (item.compare && item.compare.agree) return verdict === 'ok' ? 'agreed_and_balanced' : 'agreed_' + verdict;
+  return 'disagreement';
 }
 
 function aiPanel(it){
   if (!aiAvailable()) return '';
-  const check = (it.data && it.data.check) || {};
-  // Only where it would actually help. A statement that reconciles is already
-  // right, whether or not the bank was recognised — re-reading it with AI could
-  // only make it worse, and would send the text off the machine for nothing.
-  const worthOffering =
-    it.data.transactions.length === 0 ||
-    check.verdict === 'off' ||
-    (it.issuer === 'unknown' && check.verdict !== 'ok');
-  if (!worthOffering && it.aiState !== 'done') return '';
 
   if (it.aiState === 'working'){
-    return `<div class="checkline unchecked"><span class="badge">Reading…</span>
-      <span>Sending this statement's text for a second attempt. This takes a few seconds.</span></div>`;
+    return `<div class="checkline unchecked"><span class="badge">Second read…</span>
+      <span>Reading this statement again with AI to cross-check the figures.</span></div>`;
   }
   if (it.aiState === 'failed'){
-    return `<div class="checkline off"><span class="badge">Second attempt failed</span>
-      <span>${escapeHtml(it.aiError || '')}</span></div>`;
+    return `<div class="checkline off"><span class="badge">Cross-check failed</span>
+      <span>${escapeHtml(it.aiError || '')} The figures below come from the built-in reader alone.</span></div>`;
   }
-  if (it.aiState === 'done'){
-    return `<div class="checkline unchecked"><span class="badge">Read by AI</span>
-      <span>These rows came from an AI reading of the statement${it.aiTruncated ? ', which was long enough to be trimmed' : ''}. The balance check above still applies — don't import rows that don't balance.</span></div>`;
-  }
-  return `<div class="checkline unchecked">
-    <span class="badge">Try again with AI</span>
-    <span>This statement can be re-read by an AI service, which handles layouts no parser knows.
-    <strong>This sends the statement's text off your computer</strong> — the only part of this tool that does.
-    <button class="secondary aibtn" data-id="${it.id}" style="padding:5px 11px;font-size:12px;margin-left:8px;">Read it with AI</button></span>
-  </div>`;
-}
+  if (it.aiState !== 'done') return '';
 
+  if (it.source === 'ai'){
+    return `<div class="checkline unchecked"><span class="badge">Read by AI</span>
+      <span>This bank has no built-in reader, so these rows come from an AI reading${it.aiTruncated ? ' of a statement long enough to be trimmed' : ''}. The balance check above still applies.</span></div>`;
+  }
+
+  const c = it.compare || {};
+  if (c.agree){
+    return `<div class="checkline ok"><span class="badge">Cross-checked</span>
+      <span>Read twice, two different ways, with the same result — ${c.parserCount} transactions totalling ${money(c.parserSum.toFixed(2))}.</span></div>`;
+  }
+
+  const bits = [];
+  if (c.countDelta !== 0){
+    bits.push('the AI found ' + Math.abs(c.countDelta) + ' ' +
+              (Math.abs(c.countDelta) === 1 ? 'transaction' : 'transactions') +
+              ' ' + (c.countDelta > 0 ? 'more' : 'fewer'));
+  }
+  if (Math.abs(c.sumDelta) >= 0.02){
+    bits.push('the totals differ by ' + money(Math.abs(c.sumDelta).toFixed(2)));
+  }
+  return `<div class="checkline off"><span class="badge">Readings disagree</span>
+    <span>Read twice and ${escapeHtml(bits.join(', and '))}. The rows below are from the built-in reader.
+    Check them against the statement before importing.</span></div>`;
+}
 // The self-check, stated in terms of what the user should do about it.
 function checkLine(check){
   if (!check) return '';
@@ -1800,10 +1876,6 @@ function renderResults(){
         : `<div class="empty-note">No line-item transactions detected on this statement.</div>`}
     </div>`;
   }).join('');
-
-  cardsEl.querySelectorAll('.aibtn').forEach(btn => {
-    btn.addEventListener('click', () => runAiExtraction(Number(btn.dataset.id)));
-  });
 
   cardsEl.querySelectorAll('.rawtext').forEach(btn => {
     btn.addEventListener('click', () => {
