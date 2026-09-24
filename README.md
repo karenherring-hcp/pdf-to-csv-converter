@@ -82,20 +82,11 @@ it didn't, or if the form's field ids have drifted from what the app posts to,
 it emails an alert. No email means the pipeline is healthy. Run it by hand any
 time to check on demand.
 
-to `LOG_ENDPOINT` and `LOG_FIELD_MAP` in `app.html`; that equality is what the
-
 Leave them empty rather than guessing: when logging is on, the bug-report modal
 tells the user their report was submitted, and it has no way to detect a failed
 send (the response is opaque by design). A misconfigured endpoint therefore
 means users are thanked for reports that were never recorded. Verify an
 anonymous POST succeeds before enabling it.
-
-The earlier approach — an Apps Script web app receiving JSON — is in git history
-but doesn't work here. The housecallpro.com Workspace policy blocks sharing Apps
-Script web apps outside the domain, so anonymous requests get redirected to a
-Google sign-in page and fail with 401 no matter what the deployment's access
-setting says. A Google Form's login requirement is controlled per-form by its
-owner, which is why it works without admin involvement.
 
 External dependencies (pdf.js and JSZip) load from cdnjs at runtime; there's no
 build step and nothing to install.
