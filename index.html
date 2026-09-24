@@ -1793,9 +1793,9 @@ function aiPanel(it){
 
   const bits = [];
   if (c.countDelta !== 0){
-    bits.push('the AI found ' + Math.abs(c.countDelta) + ' ' +
-              (Math.abs(c.countDelta) === 1 ? 'transaction' : 'transactions') +
-              ' ' + (c.countDelta > 0 ? 'more' : 'fewer'));
+    bits.push('the AI found ' + Math.abs(c.countDelta) +
+              (c.countDelta > 0 ? ' more ' : ' fewer ') +
+              (Math.abs(c.countDelta) === 1 ? 'transaction' : 'transactions'));
   }
   if (Math.abs(c.sumDelta) >= 0.02){
     bits.push('the totals differ by ' + money(Math.abs(c.sumDelta).toFixed(2)));
