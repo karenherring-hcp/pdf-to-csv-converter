@@ -2,7 +2,7 @@
 
 The Apps Script project is the deployment target; this repo stays the source of
 truth. `Code.js` and `Index.html` are generated copies of `AppsScript_WebApp.gs`
-and `index.html` — gitignored here so they can't drift from the originals.
+and `app.html` — gitignored here so they can't drift from the originals.
 
 Local working copy: `~/Documents/Projects/pdf-to-csv-appsscript/`
 Script editor: https://script.google.com/d/18GCmkkXN1KQU3ol18sLb445my1ukuD2w7bNnup0SdaXSXSAwr1MsMM2z/edit
@@ -11,7 +11,7 @@ Script editor: https://script.google.com/d/18GCmkkXN1KQU3ol18sLb445my1ukuD2w7bNn
 
     cd ~/Documents/Projects/pdf-to-csv-appsscript
     cp ../pdf-to-csv-converter/AppsScript_WebApp.gs Code.js
-    cp ../pdf-to-csv-converter/index.html Index.html
+    cp ../pdf-to-csv-converter/app.html Index.html
     clasp push --force
     clasp create-deployment --description "what changed"
 

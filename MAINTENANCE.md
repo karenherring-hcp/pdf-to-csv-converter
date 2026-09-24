@@ -6,7 +6,7 @@ the project was built. Everything needed is in this repo.
 ## First: there is no model here
 
 Nothing is trained and nothing is learned. Each bank has hand-written rules — a
-function like `parseChaseStatement` in `index.html` that says, in effect, "a
+function like `parseChaseStatement` in `app.html` that says, in effect, "a
 transaction line looks like MM/DD, then a description, then a dollar amount."
 Adding a bank means writing another one of those functions. That's the whole job.
 
@@ -111,10 +111,10 @@ if you touch `renderResults()`.
 
 ## Shipping a fix
 
-Edit `index.html`, commit, push to `main`. GitHub Pages redeploys in about a
+Edit `app.html`, commit, push to `main`. GitHub Pages redeploys in about a
 minute; users get it on next load. There is no build step and nothing to install.
 
-Verify against the live URL rather than a local file — opening `index.html` from
+Verify against the live URL rather than a local file — opening `app.html` from
 disk behaves differently from being served.
 
 ## Don't touch the Google Form

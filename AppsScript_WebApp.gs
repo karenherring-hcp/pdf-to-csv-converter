@@ -12,7 +12,7 @@
 //    "PDF to CSV Converter".
 // 2. Paste this file over Code.gs.
 // 3. Add an HTML file named exactly  Index  (File > + > HTML) and paste in the
-//    entire contents of index.html from the repo.
+//    entire contents of app.html from the repo.
 // 4. Set LOG_SHEET_ID below to the id of the usage-log spreadsheet.
 // 5. Run  setGeminiApiKey  once with the key pasted in, then clear it and save.
 // 6. Run  listGeminiModels  and copy a model name from the log into
@@ -287,7 +287,7 @@ function testSetup() {
     const page = doGet().getContent();
     out.push(/let SERVER_IDENTITY = \{[^}]*"email":"[^"]+"/.test(page)
       ? 'OK  page serves with the signed-in user stamped in'
-      : 'FAIL the Index file is missing or is an out-of-date copy of index.html');
+      : 'FAIL the Index file is missing or is an out-of-date copy of app.html');
   } catch (err) { out.push('FAIL serving the page: ' + err.message); }
 
   const logged = logUsage({ eventType: 'selftest', status: 'setup_check',

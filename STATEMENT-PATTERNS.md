@@ -12,7 +12,7 @@ evidence instead of re-deriving it.
 True for checking, savings and credit cards. Nearly every statement prints both
 balances. This is the single most valuable thing in this document, because it
 lets the tool check its own work on a bank nobody has ever configured. It is
-already implemented (`reconcile()` in index.html).
+already implemented (`reconcile()` in app.html).
 
 Use it to *verify*, and to *choose between interpretations* — not just to report.
 

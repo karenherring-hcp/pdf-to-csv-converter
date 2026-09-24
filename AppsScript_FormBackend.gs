@@ -63,7 +63,7 @@ const FORM_LOG_FIELDS = [
 ];
 
 // ------------------------------------------------------------
-// These MUST stay identical to LOG_ENDPOINT and LOG_FIELD_MAP in index.html.
+// These MUST stay identical to LOG_ENDPOINT and LOG_FIELD_MAP in app.html.
 // The daily self-test deliberately posts using these copies rather than asking
 // the form for its current ids — that's the whole point. If someone edits the
 // form and Google reassigns the ids, posting to the stale ids fails, the test
@@ -196,7 +196,7 @@ function setUpLoggingForm() {
   Logger.log(buildWiringReport_(form));
 }
 
-// Reads the values index.html needs. Separated so it can be re-run on its own
+// Reads the values app.html needs. Separated so it can be re-run on its own
 // if setUpLoggingForm dies after the form is already built.
 function buildWiringReport_(form) {
   const items = form.getItems(FormApp.ItemType.TEXT).map(function (i) { return i.asTextItem(); });
@@ -334,7 +334,7 @@ function runLoggingSelfTest() {
     });
     lines.push('');
     lines.push('Fix: run showLoggingFormWiring, then update LOG_ENDPOINT and');
-    lines.push('LOG_FIELD_MAP in index.html (and FORM_WIRED_FIELD_MAP here) to match.');
+    lines.push('LOG_FIELD_MAP in app.html (and FORM_WIRED_FIELD_MAP here) to match.');
     lines.push('');
   }
   lines.push('App:  https://karenherring-hcp.github.io/pdf-to-csv-converter/');
