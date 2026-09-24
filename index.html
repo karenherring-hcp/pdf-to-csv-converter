@@ -24,7 +24,72 @@
     --red-bg:#FBEAE9;
     --stripe:#F0ECE2;
   }
+  :root{
+    --teal:#1F6F6B;
+    --teal-bg:#E4F0EF;
+    --amber-bg:#FDF3E4;
+    --ink-faint:#9A9284;
+  }
   *{box-sizing:border-box;}
+
+  /* --- hero ------------------------------------------------ */
+  .hero{
+    display:flex;
+    align-items:center;
+    gap:32px;
+    margin-bottom:40px;
+    flex-wrap:wrap;
+  }
+  .hero .words{flex:1 1 320px;min-width:0;}
+  .hero .art{flex:0 0 auto;}
+  @media (max-width:640px){ .hero .art{display:none;} }
+
+  /* --- KPI row --------------------------------------------- */
+  .kpis{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:12px;
+    margin:0 0 36px;
+  }
+  @media (max-width:560px){ .kpis{grid-template-columns:1fr;} }
+  .kpi{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:14px 16px;
+    border-top:3px solid var(--line-strong);
+  }
+  .kpi.saved{border-top-color:var(--teal);}
+  .kpi.you{border-top-color:var(--orange);}
+  .kpi.team{border-top-color:var(--ink-soft);}
+  .kpi .label{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--ink-soft);
+    margin-bottom:6px;
+  }
+  .kpi .value{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:24px;
+    font-weight:500;
+    line-height:1.1;
+    color:var(--ink);
+  }
+  .kpi .sub{font-size:12px;color:var(--ink-faint);margin-top:4px;}
+
+  /* --- supported banks ------------------------------------- */
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px;}
+  .chip{
+    font-size:11.5px;
+    padding:3px 9px;
+    border-radius:999px;
+    background:var(--teal-bg);
+    color:var(--teal);
+    border:1px solid #C8E0DE;
+    white-space:nowrap;
+  }
+  .chip.more{background:var(--stripe);color:var(--ink-soft);border-color:var(--line);}
   body{
     margin:0;
     background:var(--paper);
@@ -409,13 +474,84 @@
     </div>
   </header>
 
-  <h1>Turn statement PDFs into clean CSVs</h1>
-  <p class="lede">Drop in one statement or fifteen — each file's format is detected automatically, so there's nothing to set up. Once they're read, you choose how to download: <strong>one combined CSV</strong> holding every transaction, or a <strong>separate CSV per statement</strong> in a .zip. Everything happens in this browser tab — your statements are never uploaded to a server.</p>
+  <div class="hero">
+    <div class="words">
+      <h1>Turn statement PDFs into clean CSVs</h1>
+      <p class="lede">Drop in one statement or fifteen — each file's format is detected automatically, so there's nothing to set up. Once they're read, you choose how to download: <strong>one combined CSV</strong> holding every transaction, or a <strong>separate CSV per statement</strong> in a .zip. Your statements are read in this browser tab and the PDF is never uploaded.</p>
+    </div>
+    <div class="art" aria-hidden="true">
+      <svg width="210" height="150" viewBox="0 0 210 150" xmlns="http://www.w3.org/2000/svg">
+        <!-- statement page -->
+        <rect x="6" y="14" width="68" height="92" rx="4" fill="#FFFFFF" stroke="var(--line-strong)" stroke-width="1.5"/>
+        <path d="M6 24 h68" stroke="var(--orange)" stroke-width="3"/>
+        <g stroke="var(--line-strong)" stroke-width="2" stroke-linecap="round">
+          <path d="M15 38 h30"/><path d="M15 48 h50"/><path d="M15 58 h42"/>
+          <path d="M15 68 h50"/><path d="M15 78 h34"/><path d="M15 88 h50"/>
+        </g>
+        <g fill="var(--ink-faint)">
+          <rect x="52" y="35" width="13" height="5" rx="1.5"/>
+          <rect x="52" y="55" width="13" height="5" rx="1.5"/>
+          <rect x="52" y="75" width="13" height="5" rx="1.5"/>
+        </g>
+        <!-- arrow -->
+        <path d="M84 60 h26" stroke="var(--orange)" stroke-width="3" stroke-linecap="round"/>
+        <path d="M104 53 l8 7 -8 7" fill="none" stroke="var(--orange)" stroke-width="3"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- spreadsheet -->
+        <rect x="122" y="24" width="82" height="72" rx="4" fill="#FFFFFF" stroke="var(--line-strong)" stroke-width="1.5"/>
+        <rect x="122" y="24" width="82" height="14" rx="4" fill="var(--teal)"/>
+        <rect x="122" y="34" width="82" height="4" fill="var(--teal)"/>
+        <g stroke="var(--line)" stroke-width="1">
+          <path d="M122 52 h82"/><path d="M122 66 h82"/><path d="M122 80 h82"/>
+          <path d="M150 38 v58"/><path d="M178 38 v58"/>
+        </g>
+        <g fill="var(--ink-soft)">
+          <rect x="128" y="43" width="15" height="4" rx="1.5"/><rect x="156" y="43" width="15" height="4" rx="1.5"/>
+          <rect x="128" y="57" width="15" height="4" rx="1.5"/><rect x="156" y="57" width="15" height="4" rx="1.5"/>
+          <rect x="128" y="71" width="15" height="4" rx="1.5"/><rect x="156" y="71" width="15" height="4" rx="1.5"/>
+        </g>
+        <g fill="var(--green)">
+          <rect x="184" y="43" width="14" height="4" rx="1.5"/>
+          <rect x="184" y="57" width="14" height="4" rx="1.5"/>
+          <rect x="184" y="71" width="14" height="4" rx="1.5"/>
+        </g>
+        <!-- tick -->
+        <circle cx="196" cy="104" r="13" fill="var(--green-bg)" stroke="var(--green)" stroke-width="1.5"/>
+        <path d="M190 104 l4 4 8 -9" fill="none" stroke="var(--green)" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="kpis" id="kpis">
+    <div class="kpi saved">
+      <div class="label">Typing time saved</div>
+      <div class="value" id="kpiSaved">—</div>
+      <div class="sub" id="kpiSavedSub">this session</div>
+    </div>
+    <div class="kpi you">
+      <div class="label">Your statements</div>
+      <div class="value" id="kpiYou">—</div>
+      <div class="sub">this month</div>
+    </div>
+    <div class="kpi team">
+      <div class="label">Team statements</div>
+      <div class="value" id="kpiTeam">—</div>
+      <div class="sub">this month</div>
+    </div>
+  </div>
 
   <div class="dropzone" id="dropzone">
     <div class="icon"><i>&#8593;</i></div>
     <div class="title">Drop PDF statements here, or click to browse</div>
     <div class="sub">Add one file or a whole stack — select them all at once</div>
+    <div class="chips" style="justify-content:center;margin-top:14px;">
+      <span class="chip">Home Depot</span><span class="chip">Amex / Amazon</span>
+      <span class="chip">Chase</span><span class="chip">U.S. Bank</span>
+      <span class="chip">Truist</span><span class="chip">Woodforest</span>
+      <span class="chip">Navy Federal</span><span class="chip">Wells Fargo</span>
+      <span class="chip more">other banks — read and checked</span>
+    </div>
     <input type="file" id="fileInput" accept="application/pdf" multiple>
   </div>
 
@@ -1591,10 +1727,84 @@ function parseHomeDepotStatement(clean){
   };
 }
 
+// ============================================================
+// Time saved, usage stats, and something to read while it works
+// ============================================================
+
+// Keying a transaction by hand — read it, type the date, the payee, the amount,
+// check it — is roughly twenty seconds. Deliberately conservative: better the
+// number is defensible than flattering.
+const SECONDS_PER_TRANSACTION = 20;
+
+function describeDuration(seconds){
+  if (seconds < 60) return 'under a minute';
+  const mins = Math.round(seconds / 60);
+  if (mins < 90) return mins + (mins === 1 ? ' minute' : ' minutes');
+  const hours = seconds / 3600;
+  return (hours < 10 ? hours.toFixed(1) : Math.round(hours)) + ' hours';
+}
+
+function updateSavedKpi(){
+  const rows = items.filter(i => i.status === 'ok')
+                    .reduce((n, i) => n + i.data.transactions.length, 0);
+  const el = document.getElementById('kpiSaved');
+  const sub = document.getElementById('kpiSavedSub');
+  if (!rows){ el.textContent = '—'; sub.textContent = 'this session'; return; }
+  el.textContent = describeDuration(rows * SECONDS_PER_TRANSACTION);
+  sub.textContent = rows.toLocaleString() + (rows === 1 ? ' transaction' : ' transactions') + ' this session';
+}
+
+function loadUsageStats(){
+  if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+  google.script.run
+    .withSuccessHandler(s => {
+      if (!s || !s.ok) return;
+      document.getElementById('kpiYou').textContent = s.you.toLocaleString();
+      document.getElementById('kpiTeam').textContent = s.team.toLocaleString();
+    })
+    .withFailureHandler(() => { /* stats are decoration; never block the tool */ })
+    .getUsageStats();
+}
+
+// Shown while a file is being read. Dry rather than zany — this is somebody's
+// month-end, and a tool that jokes too hard about money reads as careless.
+const READING_LINES = [
+  'Reading the fine print…',
+  'Untangling the columns…',
+  'Working out which way is a credit…',
+  'Counting the decimals twice…',
+  'Negotiating with a minus sign…',
+  'Squinting at the date format…',
+  'Asking the balance to confirm…',
+  'Checking nothing fell off the page…',
+  'Separating the payee from the city…',
+  'Looking for the running total…'
+];
+
+function readingLine(id){
+  // Tied to the file and a slow clock, so it changes as you watch but doesn't
+  // flicker between renders.
+  const tick = Math.floor(Date.now() / 1800);
+  return READING_LINES[(id + tick) % READING_LINES.length];
+}
+
+let readingTimer = null;
+function keepReadingLinesMoving(){
+  const anyBusy = items.some(i => i.status === 'busy');
+  if (anyBusy && !readingTimer){
+    readingTimer = setInterval(renderQueue, 1800);
+  } else if (!anyBusy && readingTimer){
+    clearInterval(readingTimer);
+    readingTimer = null;
+  }
+}
+
 function renderQueue(){
   filecount.textContent = items.length + (items.length === 1 ? ' file loaded' : ' files loaded');
   queueEl.innerHTML = items.map(it => {
-    const statusText = it.status === 'busy' ? 'Reading…' : it.status === 'ok' ? (it.data.transactions.length + ' transactions found') : it.error;
+    const statusText = it.status === 'busy' ? readingLine(it.id)
+      : it.status === 'ok' ? (it.data.transactions.length + ' transactions found')
+      : it.error;
     return `<div class="row ${it.status}">
       <div class="dot"></div>
       <div class="name">${escapeHtml(it.name)}</div>
@@ -1602,6 +1812,9 @@ function renderQueue(){
       <button class="remove" data-id="${it.id}" aria-label="Remove">&times;</button>
     </div>`;
   }).join('');
+  keepReadingLinesMoving();
+  updateSavedKpi();
+
   queueEl.querySelectorAll('.remove').forEach(btn => {
     btn.addEventListener('click', () => {
       items = items.filter(i => i.id !== Number(btn.dataset.id));
@@ -1936,6 +2149,7 @@ document.getElementById('whoSaveBtn').addEventListener('click', () => {
 });
 
 renderWhoButton();
+loadUsageStats();
 
 const ISSUER_LABELS = {
   homedepot: 'Home Depot Pro Xtra',

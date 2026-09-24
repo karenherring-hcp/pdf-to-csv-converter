@@ -121,6 +121,38 @@ function sendAlert_(p) {
 }
 
 // ------------------------------------------------------------
+// Usage stats, shown back to the person using the tool.
+// The log already exists for reporting; this makes it visible to the people
+// feeding it rather than only to whoever reads the Sheet.
+// ------------------------------------------------------------
+
+function getUsageStats() {
+  try {
+    const sheet = SpreadsheetApp.openById(LOG_SHEET_ID).getSheetByName(LOG_TAB);
+    if (!sheet || sheet.getLastRow() < 2) {
+      return { ok: true, you: 0, team: 0, youTransactions: 0, teamTransactions: 0 };
+    }
+    const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, LOG_COLUMNS.length).getValues();
+    const me = currentUserEmail_();
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    let you = 0, team = 0, youTx = 0, teamTx = 0;
+    rows.forEach(function (r) {
+      const when = r[0] instanceof Date ? r[0] : new Date(r[0]);
+      if (!(when >= monthStart)) return;
+      if (String(r[2]) !== 'conversion') return;      // not feedback or self-tests
+      const tx = parseInt(r[5], 10) || 0;
+      team++; teamTx += tx;
+      if (String(r[1]) === me) { you++; youTx += tx; }
+    });
+    return { ok: true, you: you, team: team, youTransactions: youTx, teamTransactions: teamTx };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+// ------------------------------------------------------------
 // AI extraction (Gemini) — for statements the parsers can't read.
 // The key lives in Script Properties, never in the page.
 // ------------------------------------------------------------
