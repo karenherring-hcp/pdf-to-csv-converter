@@ -13,7 +13,13 @@ Script editor: https://script.google.com/d/18GCmkkXN1KQU3ol18sLb445my1ukuD2w7bNn
     cp ../pdf-to-csv-converter/AppsScript_WebApp.gs Code.js
     cp ../pdf-to-csv-converter/app.html Index.html
     clasp push --force
-    clasp create-deployment --description "what changed"
+    clasp update-deployment AKfycbyqMiovaFJWVyqHml-x4ey2YqN__Hx2GCb4ERbojvwlsHAZ048W3V2EL8HVlNj6ukdrkw \
+      --versionNumber <the version push just created> --description "what changed"
+
+**Update that deployment, never `create-deployment`.** Creating one mints a
+brand new /exec URL, so the link everyone has keeps serving the old code while
+the new URL nobody has serves the new. That happened once already; the stray
+deployment was deleted. There is one deployment and its id is above.
 
 Re-pasting files into the editor by hand is what caused a stale version to be
 run twice before; use the commands.
