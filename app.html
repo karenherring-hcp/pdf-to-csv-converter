@@ -679,43 +679,19 @@ function extractPageText(items){
 }
 
 // ============================================================
-// Usage logging / bug reports (optional)
-// Leave blank to disable logging entirely — the app works fine without it.
+// Usage logging
 //
-// Currently blank on purpose. The Apps Script web app this originally pointed
-// at returns 401 to anonymous requests (Google redirects them to a sign-in
-// page), because the housecallpro.com Workspace policy blocks sharing Apps
-// Script web apps outside the domain. A Google Form backend is replacing it.
+// Goes to the Apps Script backend, which writes straight to the log Sheet as
+// the signed-in user and can actually report a failure.
 //
-// Do not fill these in without first confirming an anonymous POST actually
-// succeeds — once logging is on, the bug-report modal reports success, so a
-// silently-broken endpoint means users are told their report was submitted
-// when nothing was recorded.
-//
-// Both values come from running setUpLoggingForm() in AppsScript_FormBackend.gs.
-// LOG_ENDPOINT is the form's /formResponse URL; LOG_FIELD_MAP maps each payload
-// key to the entry.N id the form expects for it.
+// It used to post to a Google Form instead. That existed only because the tool
+// once served people with no Google account, and it had a real flaw: a browser
+// hides the response to a cross-site form post, so a broken endpoint looked
+// identical to a working one and users were told their report had been sent
+// when nothing was recorded. Nothing posts to that form any more.
 // ============================================================
-// Verified 2026-09-20: an anonymous POST to this endpoint (no Google session)
-// returns 200 "Your response has been recorded", with no redirect to a sign-in
-// page. Re-run that check before changing either value.
-const LOG_ENDPOINT = 'https://docs.google.com/forms/d/e/1FAIpQLSd813_hfyGvYxop0u_hv4u62SL8OOgjTyNz0D3-ae5D8pPhRg/formResponse';
-const LOG_FIELD_MAP = {
-  eventType:        'entry.2124701020',
-  issuer:           'entry.295167859',
-  fileName:         'entry.515932360',
-  transactionCount: 'entry.908279194',
-  status:           'entry.525529088',
-  message:          'entry.203522849',
-  userNote:         'entry.1654949428',
-  userEmail:        'entry.640039570',
-  orgId:            'entry.2087700925',
-  bankReported:     'entry.923042208',
-  statementMonth:   'entry.394294366'
-};
-
 function loggingEnabled(){
-  return !!LOG_ENDPOINT && Object.keys(LOG_FIELD_MAP).length > 0;
+  return !!(typeof google !== 'undefined' && google.script && google.script.run);
 }
 
 // ------------------------------------------------------------
@@ -801,39 +777,17 @@ function renderWhoButton(){
 }
 
 function logEvent(payload){
-  // Served from Apps Script: log straight to the Sheet as the signed-in user.
-  // Reliable, and a failure actually surfaces — unlike the form POST below,
-  // whose response the browser hides from us.
-  if (typeof google !== 'undefined' && google.script && google.script.run) {
-    try {
-      google.script.run
-        .withFailureHandler(function(){ /* never let logging affect the user */ })
-        .logUsage(payload);
-    } catch (e) { /* ignore */ }
-    return;
-  }
-
   if (!loggingEnabled()) return;
+  // Attach who this is, unless the payload already named someone (a feedback
+  // form where they typed a different address).
+  if (!payload.userEmail) {
+    const label = whoLabel();
+    if (label) payload = Object.assign({}, payload, { userEmail: label });
+  }
   try {
-    // Attach who this is, unless the payload already named someone (a feedback
-    // form where they typed a different address).
-    if (!payload.userEmail) {
-      const label = whoLabel();
-      if (label) payload = Object.assign({}, payload, { userEmail: label });
-    }
-    // URLSearchParams sends application/x-www-form-urlencoded, which is what
-    // Google Forms expects and is also a CORS-safelisted content type, so the
-    // browser skips the preflight that forms endpoints wouldn't answer.
-    const body = new URLSearchParams();
-    for (const key in LOG_FIELD_MAP){
-      const v = payload[key];
-      body.append(LOG_FIELD_MAP[key], (v === undefined || v === null) ? '' : String(v));
-    }
-    fetch(LOG_ENDPOINT, {
-      method: 'POST',
-      mode: 'no-cors', // the response is opaque; we only need to fire it off
-      body
-    }).catch(() => {}); // never let logging failures affect the user
+    google.script.run
+      .withFailureHandler(function(){ /* never let logging affect the user */ })
+      .logUsage(payload);
   } catch (e) { /* ignore */ }
 }
 
@@ -2190,11 +2144,6 @@ document.getElementById('bugCancelBtn').addEventListener('click', () => {
 bugModalBackdrop.addEventListener('click', (e) => {
   if (e.target === bugModalBackdrop) bugModalBackdrop.classList.remove('open');
 });
-const BUG_FIELD_LABELS = {
-  orgId: 'Pro Org ID',
-  bankReported: 'Bank',
-  statementMonth: 'Statement month'
-};
 
 // Only a "something's wrong" report needs an account to investigate against.
 // Asking a suggestion for an Org ID is how you stop getting suggestions.
@@ -2275,12 +2224,7 @@ document.getElementById('bugSubmitBtn').addEventListener('click', () => {
     reported.statementMonth = '';
   }
 
-  // If the log doesn't have a dedicated column for one of these yet, fold it
-  // into the note rather than dropping it on the floor.
-  const homeless = Object.keys(reported).filter(k => !LOG_FIELD_MAP[k] && reported[k]);
-  const userNote = homeless.length
-    ? homeless.map(k => BUG_FIELD_LABELS[k] + ': ' + reported[k]).join('\n') + '\n\n' + description
-    : description;
+  const userNote = description;
 
   const loaded = items.filter(i => i.status === 'ok');
   logEvent(Object.assign({
@@ -2297,7 +2241,7 @@ document.getElementById('bugSubmitBtn').addEventListener('click', () => {
     status: 'reported'
   }, reported));
 
-  const sent = loggingEnabled() || (typeof google !== 'undefined' && google.script && google.script.run);
+  const sent = loggingEnabled();
   bugStatusEl.textContent = sent
     ? (feedbackKind === 'bug'
         ? 'Thanks — your report has been submitted.'

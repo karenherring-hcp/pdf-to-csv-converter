@@ -70,26 +70,20 @@ log and email an alert.
 - `app.html` — the entire app (HTML, CSS, JS inlined). This is the canonical
   copy; fixes and new bank formats get pushed here and go live on GitHub Pages
   automatically.
-- `AppsScript_FormBackend.gs` — sets up the usage/bug-report log. Run
-  `setUpLoggingForm()` once from the log Sheet's Apps Script project; it builds
-  a Google Form, points its responses at that Sheet, registers an email alert
-  trigger, and prints the two values to paste into `LOG_ENDPOINT` and
-  `LOG_FIELD_MAP` in `app.html`.
+- `AppsScript_WebApp.gs` — the backend. Serves the page with the signed-in
+  account stamped in, logs usage straight to the Sheet, emails alerts, and
+  provides the Gemini reading.
 
 ### A note on logging
 
-A daily self-test guards this. `runLoggingSelfTest()` submits a tagged row the
 same way the app does — using its own hardcoded copy of the endpoint and field
 ids, deliberately not the form's current ones — then checks the row arrived. If
 it didn't, or if the form's field ids have drifted from what the app posts to,
 it emails an alert. No email means the pipeline is healthy. Run it by hand any
 time to check on demand.
 
-`FORM_WIRED_POST_URL` and `FORM_WIRED_FIELD_MAP` in the .gs must stay identical
 to `LOG_ENDPOINT` and `LOG_FIELD_MAP` in `app.html`; that equality is what the
-self-test is checking.
 
-Logging is **off** unless both `LOG_ENDPOINT` and `LOG_FIELD_MAP` are filled in.
 Leave them empty rather than guessing: when logging is on, the bug-report modal
 tells the user their report was submitted, and it has no way to detect a failed
 send (the response is opaque by design). A misconfigured endpoint therefore

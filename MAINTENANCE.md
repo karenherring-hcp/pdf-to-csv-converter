@@ -117,10 +117,16 @@ minute; users get it on next load. There is no build step and nothing to install
 Verify against the live URL rather than a local file — opening `app.html` from
 disk behaves differently from being served.
 
-## Don't touch the Google Form
 
-The app posts to specific question IDs on that form. Editing the form's questions
-can reassign them, which silently breaks logging — the browser can't see that a
-submission failed, so users keep being told their report was sent. A daily
-self-test in `AppsScript_FormBackend.gs` catches this and emails an alert, but
-the simpler answer is to leave the form's questions alone.
+## Logging
+
+Logging goes through `logUsage` in `AppsScript_WebApp.gs`, which appends to the
+usage-log Sheet as the script owner and returns a real result, so a failure is
+visible rather than silent.
+
+An earlier version posted to a Google Form instead. That existed only because
+the tool once served people with no Google account, and it carried a real bug: a
+browser hides the response to a cross-site form post, so a broken endpoint was
+indistinguishable from a working one and users were told their report had been
+sent when nothing was recorded. It is retired — the code is in git history, and
+nothing posts to that form any more. Don't reintroduce it.
