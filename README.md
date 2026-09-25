@@ -24,7 +24,10 @@ No account, install, or login needed. Any modern browser works.
    Download CSV button.
 
 The CSV columns are `Date, Vendor, Description, Amount`. Credits and payments
-come through as negative amounts.
+follow the statement's own direction: the sign matches the way that balance moved.
+On a chequing account a withdrawal is negative; on a credit card a purchase is
+positive, because it increases what is owed. Flip them on import if your
+destination expects the other convention.
 
 ## Supported statement formats
 
