@@ -30,7 +30,7 @@ const LOG_TAB = 'Usage';
 const ALERT_TO = 'karen.herring@housecallpro.com';
 
 // Set this from the output of listGeminiModels().
-const GEMINI_MODEL = 'gemini-2.5-flash';
+const GEMINI_MODEL = 'gemini-3.8-flash';
 const GEMINI_HOST = 'https://generativelanguage.googleapis.com/v1beta';
 
 // ------------------------------------------------------------
@@ -162,6 +162,46 @@ function setGeminiApiKey() {
   if (!key) throw new Error('Paste the key into setGeminiApiKey first.');
   PropertiesService.getScriptProperties().setProperty('GEMINI_API_KEY', key);
   Logger.log('Stored. Now clear the key from this function and save.');
+}
+
+// Models the list endpoint advertises are not always usable: Google retires one
+// for new accounts while still listing it, and you only find out on the first
+// real call. So try candidates against an actual request and report the first
+// that answers, rather than trusting the catalogue.
+function findWorkingModel() {
+  const key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!key) throw new Error('Run setGeminiApiKey first.');
+
+  // Pinned versions first; the moving aliases are a fallback, since a model that
+  // changes under a tool whose output has been validated is its own problem.
+  const candidates = [
+    'gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-3.8-pro',
+    'gemini-2.5-flash', 'gemini-2.5-pro',
+    'gemini-flash-latest', 'gemini-pro-latest', 'gemini-3-flash-preview'
+  ];
+
+  for (let i = 0; i < candidates.length; i++) {
+    const m = candidates[i];
+    const res = UrlFetchApp.fetch(GEMINI_HOST + '/models/' + m + ':generateContent', {
+      method: 'post', contentType: 'application/json',
+      headers: { 'x-goog-api-key': key },
+      payload: JSON.stringify({
+        contents: [{ parts: [{ text: 'Reply with the single word: ok' }] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 200 }
+      }),
+      muteHttpExceptions: true
+    });
+    if (res.getResponseCode() === 200) {
+      Logger.log('WORKS: ' + m);
+      Logger.log('Set  const GEMINI_MODEL = \'' + m + '\';  near the top, then save.');
+      return m;
+    }
+    let why = '';
+    try { why = (JSON.parse(res.getContentText()).error || {}).message || ''; } catch (e) {}
+    Logger.log('no  ' + m + '  (' + res.getResponseCode() + ') ' + why.slice(0, 110));
+  }
+  Logger.log('None of the candidates worked. Run listGeminiModels and send me the full list.');
+  return null;
 }
 
 // Prints the models this key can actually use. Copy one into GEMINI_MODEL.
@@ -306,7 +346,14 @@ function testSetup() {
       '08/03 HARDWARE STORE BOISE ID 200.00\n' +
       '08/07 FUEL STOP NAMPA ID 50.00\n' +
       '08/19 ONLINE PAYMENT THANK YOU 300.00-\n');
-    if (!r.ok) out.push('FAIL AI extraction: ' + r.error);
+    if (!r.ok) {
+      out.push('FAIL AI extraction with GEMINI_MODEL = ' + GEMINI_MODEL + ': ' + r.error);
+      out.push('     trying other models…');
+      const working = findWorkingModel();
+      out.push(working
+        ? '     -> use  ' + working + '  : set GEMINI_MODEL to it, save, and run testSetup again'
+        : '     -> none of the usual models answered; send me the listGeminiModels output');
+    }
     else {
       const rows = (r.data.transactions || []);
       const sum = rows.reduce(function (s, t) { return s + t.amount; }, 0);
