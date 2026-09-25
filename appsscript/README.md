@@ -13,8 +13,9 @@ Script editor: https://script.google.com/d/18GCmkkXN1KQU3ol18sLb445my1ukuD2w7bNn
     cp ../pdf-to-csv-converter/AppsScript_WebApp.gs Code.js
     cp ../pdf-to-csv-converter/app.html Index.html
     clasp push --force
+    clasp create-version "what changed"          # prints: Created version N
     clasp update-deployment AKfycbyqMiovaFJWVyqHml-x4ey2YqN__Hx2GCb4ERbojvwlsHAZ048W3V2EL8HVlNj6ukdrkw \
-      --versionNumber <the version push just created> --description "what changed"
+      --versionNumber N --description "what changed"
 
 **Update that deployment, never `create-deployment`.** Creating one mints a
 brand new /exec URL, so the link everyone has keeps serving the old code while
