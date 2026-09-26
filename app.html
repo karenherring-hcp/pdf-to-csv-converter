@@ -79,17 +79,6 @@
   .kpi .sub{font-size:12px;color:var(--ink-faint);margin-top:4px;}
 
   /* --- supported banks ------------------------------------- */
-  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px;}
-  .chip{
-    font-size:11.5px;
-    padding:3px 9px;
-    border-radius:999px;
-    background:var(--teal-bg);
-    color:var(--teal);
-    border:1px solid #C8E0DE;
-    white-space:nowrap;
-  }
-  .chip.more{background:var(--stripe);color:var(--ink-soft);border-color:var(--line);}
   body{
     margin:0;
     background:var(--paper);
@@ -538,13 +527,6 @@
     <div class="icon"><i>&#8593;</i></div>
     <div class="title">Drop PDF statements here, or click to browse</div>
     <div class="sub">Add one file or a whole stack — select them all at once</div>
-    <div class="chips" style="justify-content:center;margin-top:14px;">
-      <span class="chip">Home Depot</span><span class="chip">Amex / Amazon</span>
-      <span class="chip">Chase</span><span class="chip">U.S. Bank</span>
-      <span class="chip">Truist</span><span class="chip">Woodforest</span>
-      <span class="chip">Navy Federal</span><span class="chip">Wells Fargo</span>
-      <span class="chip more">other banks — read and checked</span>
-    </div>
     <input type="file" id="fileInput" accept="application/pdf" multiple>
   </div>
 
