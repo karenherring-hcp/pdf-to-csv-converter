@@ -152,6 +152,110 @@ function getUsageStats() {
   }
 }
 
+
+// ------------------------------------------------------------
+// Usage reporting — the log, read back as an answer.
+//
+// Run buildUsageSummary any time, or let the Monday trigger refresh it. It
+// writes a "Usage Summary" tab: who used the tool and how often, what the
+// month looks like, and every piece of feedback in one place. Reading raw rows
+// is not reporting.
+// ------------------------------------------------------------
+
+function buildUsageSummary() {
+  const ss = SpreadsheetApp.openById(LOG_SHEET_ID);
+  const sheet = ss.getSheetByName(LOG_TAB);
+  if (!sheet || sheet.getLastRow() < 2) { Logger.log('Nothing logged yet.'); return; }
+
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, LOG_COLUMNS.length).getValues();
+  const people = {}, months = {};
+  const feedback = [];
+
+  rows.forEach(function (r) {
+    const when = r[0] instanceof Date ? r[0] : new Date(r[0]);
+    const user = String(r[1] || '').trim() || '(not identified)';
+    const event = String(r[2] || '');
+    if (event === 'selftest') return;
+
+    if (event === 'conversion') {
+      const p = people[user] || (people[user] = { runs: 0, tx: 0, last: null, banks: {}, trouble: 0 });
+      p.runs++;
+      p.tx += parseInt(r[5], 10) || 0;
+      if (!p.last || when > p.last) p.last = when;
+      const bank = String(r[3] || 'unknown');
+      p.banks[bank] = (p.banks[bank] || 0) + 1;
+      const status = String(r[6] || '');
+      if (status.indexOf('success') === -1 && status !== 'agreed_and_balanced') p.trouble++;
+
+      const key = Utilities.formatDate(when, Session.getScriptTimeZone(), 'yyyy-MM');
+      const m = months[key] || (months[key] = { runs: 0, tx: 0, who: {} });
+      m.runs++; m.tx += parseInt(r[5], 10) || 0; m.who[user] = true;
+    }
+
+    if (event === 'bug_report' || event.indexOf('feedback_') === 0) {
+      feedback.push([when,
+        event === 'bug_report' ? 'Problem' : event.replace('feedback_', ''),
+        user, String(r[9] || ''), String(r[10] || r[3] || ''), String(r[8] || '').slice(0, 500)]);
+    }
+  });
+
+  const out = [];
+  out.push(['PDF to CSV Converter \u2014 usage summary']);
+  out.push(['Rebuilt', new Date()]);
+  out.push([]);
+  out.push(['BY PERSON']);
+  out.push(['Person', 'Statements', 'Transactions', 'Last used', 'Needed checking', 'Banks used']);
+  Object.keys(people).sort(function (a, b) { return people[b].runs - people[a].runs; })
+    .forEach(function (u) {
+      const p = people[u];
+      const banks = Object.keys(p.banks).sort(function (a, b) { return p.banks[b] - p.banks[a]; })
+        .map(function (b) { return b + ' (' + p.banks[b] + ')'; }).join(', ');
+      out.push([u, p.runs, p.tx, p.last, p.trouble, banks]);
+    });
+  out.push([]);
+  out.push(['BY MONTH']);
+  out.push(['Month', 'Statements', 'Transactions', 'People who used it']);
+  Object.keys(months).sort().forEach(function (k) {
+    out.push([k, months[k].runs, months[k].tx, Object.keys(months[k].who).length]);
+  });
+  out.push([]);
+  out.push(['FEEDBACK AND PROBLEMS']);
+  out.push(['When', 'Kind', 'From', 'Org ID', 'Bank', 'What they said']);
+  feedback.sort(function (a, b) { return b[0] - a[0]; }).forEach(function (f) { out.push(f); });
+
+  writeSummary_(ss, out);
+  Logger.log('Rebuilt: ' + Object.keys(people).length + ' people, ' + feedback.length + ' feedback items.');
+}
+
+// Only ever rewrites its own tab; never touches the logged rows.
+function writeSummary_(ss, rows) {
+  let sheet = ss.getSheetByName('Usage Summary');
+  if (!sheet) sheet = ss.insertSheet('Usage Summary');
+  sheet.clear();
+  const width = rows.reduce(function (w, r) { return Math.max(w, r.length); }, 1);
+  const padded = rows.map(function (r) {
+    const c = r.slice(); while (c.length < width) c.push(''); return c;
+  });
+  sheet.getRange(1, 1, padded.length, width).setValues(padded);
+  sheet.getRange(1, 1, 1, width).setFontWeight('bold').setFontSize(12);
+  padded.forEach(function (r, i) {
+    if (['BY PERSON', 'BY MONTH', 'FEEDBACK AND PROBLEMS'].indexOf(String(r[0])) !== -1) {
+      sheet.getRange(i + 1, 1, 1, width).setFontWeight('bold').setBackground('#F0ECE2');
+    }
+  });
+  sheet.setFrozenRows(2);
+  for (let c = 1; c <= width; c++) sheet.autoResizeColumn(c);
+}
+
+function installWeeklySummary() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'buildUsageSummary') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('buildUsageSummary').timeBased()
+    .onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(6).create();
+  Logger.log('Usage summary will rebuild every Monday morning.');
+}
+
 // ------------------------------------------------------------
 // AI extraction (Gemini) — for statements the parsers can't read.
 // The key lives in Script Properties, never in the page.
