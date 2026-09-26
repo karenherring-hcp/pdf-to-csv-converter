@@ -27,6 +27,12 @@
 // The "Statement-to-CSV — Usage Log" spreadsheet id (the long string in its URL).
 const LOG_SHEET_ID = '1mpWzJAiDh3papsQyV1g8tgVq3zflGZZxYauySseNr7w';
 const LOG_TAB = 'Usage';
+
+// Printed into the Usage Summary tab so the spreadsheet always carries a way
+// back to the tool and its code. The script is standalone, so it does not
+// appear under the Sheet's Extensions menu and is otherwise easy to lose.
+const APP_URL = 'https://script.google.com/a/macros/housecallpro.com/s/AKfycbyqMiovaFJWVyqHml-x4ey2YqN__Hx2GCb4ERbojvwlsHAZ048W3V2EL8HVlNj6ukdrkw/exec';
+const EDITOR_URL = 'https://script.google.com/d/18GCmkkXN1KQU3ol18sLb445my1ukuD2w7bNnup0SdaXSXSAwr1MsMM2z/edit';
 const ALERT_TO = 'karen.herring@housecallpro.com';
 
 // Set this from the output of listGeminiModels().
@@ -202,6 +208,8 @@ function buildUsageSummary() {
   const out = [];
   out.push(['PDF to CSV Converter \u2014 usage summary']);
   out.push(['Rebuilt', new Date()]);
+  out.push(['The tool', APP_URL]);
+  out.push(['Its code (standalone \u2014 not under Extensions)', EDITOR_URL]);
   out.push([]);
   out.push(['BY PERSON']);
   out.push(['Person', 'Statements', 'Transactions', 'Last used', 'Needed checking', 'Banks used']);
