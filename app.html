@@ -62,13 +62,16 @@
   .kpi.saved{border-top-color:var(--teal);}
   .kpi.you{border-top-color:var(--orange);}
   .kpi.team{border-top-color:var(--ink-soft);}
-  .kpi .label{
+  .kpi .label{display:flex;align-items:center;gap:7px;}
+  .kpi .label svg{flex:none;opacity:.85;}
+  .kpi .labeltext{
     font-size:11px;
     text-transform:uppercase;
     letter-spacing:0.05em;
     color:var(--ink-soft);
     margin-bottom:6px;
   }
+  .kpi .labeltext{}
   .kpi .value{
     font-family:'IBM Plex Mono',monospace;
     font-size:24px;
@@ -76,6 +79,25 @@
     line-height:1.1;
     color:var(--ink);
   }
+  .allgood{
+    display:flex;align-items:center;gap:12px;
+    background:linear-gradient(90deg,var(--green-bg) 0%, #F2F8F4 100%);
+    border:1px solid #BFD9CB;
+    border-radius:8px;
+    padding:13px 17px;
+    margin-bottom:18px;
+    animation:pop .34s cubic-bezier(.2,.8,.3,1.2) both;
+  }
+  @keyframes pop{from{opacity:0;transform:translateY(-4px) scale(.995);}to{opacity:1;transform:none;}}
+  @media (prefers-reduced-motion:reduce){ .allgood{animation:none;} }
+  .allgood .tick{
+    flex:none;width:26px;height:26px;border-radius:50%;
+    background:var(--green);color:#fff;
+    display:flex;align-items:center;justify-content:center;
+    font-size:14px;font-weight:700;
+  }
+  .allgood .say{font-size:14px;color:var(--green);font-weight:500;}
+  .allgood .say span{color:var(--ink-soft);font-weight:400;}
   .kpi .sub{font-size:12px;color:var(--ink-faint);margin-top:4px;}
 
   /* --- supported banks ------------------------------------- */
@@ -125,24 +147,34 @@
     margin:0 0 40px;
   }
   .dropzone{
-    border:2px dashed var(--line-strong);
-    border-radius:4px;
-    background:var(--card);
-    padding:48px 32px;
+    border:2px dashed #BFD8D5;
+    border-radius:10px;
+    background:linear-gradient(180deg,#FBFDFD 0%, var(--teal-bg) 100%);
+    padding:44px 32px;
     text-align:center;
     cursor:pointer;
-    transition:border-color .15s ease, background .15s ease;
+    transition:border-color .15s ease, background .15s ease, transform .15s ease;
   }
+  .dropzone:hover{border-color:var(--teal);}
   .dropzone.drag{
     border-color:var(--orange);
-    background:#FFF6EF;
+    background:linear-gradient(180deg,#FFFBF7 0%, #FFEEDF 100%);
+    transform:scale(1.005);
   }
   .dropzone .icon{
-    width:40px;height:40px;margin:0 auto 16px;
-    border:2px solid var(--ink);
+    width:52px;height:52px;margin:0 auto 16px;
+    border:none;
+    background:var(--teal);
+    color:#fff;
     border-radius:50%;
     display:flex;align-items:center;justify-content:center;
-    font-size:18px;
+    font-size:22px;
+    box-shadow:0 4px 14px rgba(31,111,107,.28);
+    transition:background .15s ease, box-shadow .15s ease;
+  }
+  .dropzone.drag .icon{
+    background:var(--orange);
+    box-shadow:0 4px 14px rgba(249,99,2,.3);
   }
   .dropzone .title{
     font-weight:500;
@@ -507,17 +539,17 @@
 
   <div class="kpis" id="kpis">
     <div class="kpi saved">
-      <div class="label">Typing time saved</div>
+      <div class="label"><svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="#1F6F6B" stroke-width="1.6"/><path d="M8 4.4V8l2.6 1.6" fill="none" stroke="#1F6F6B" stroke-width="1.6" stroke-linecap="round"/></svg>Typing time saved</div>
       <div class="value" id="kpiSaved">—</div>
       <div class="sub" id="kpiSavedSub">this session</div>
     </div>
     <div class="kpi you">
-      <div class="label">Your statements</div>
+      <div class="label"><svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.2" r="2.7" fill="none" stroke="#F96302" stroke-width="1.6"/><path d="M2.8 13.6c.6-2.7 2.7-4.1 5.2-4.1s4.6 1.4 5.2 4.1" fill="none" stroke="#F96302" stroke-width="1.6" stroke-linecap="round"/></svg>Your statements</div>
       <div class="value" id="kpiYou">—</div>
       <div class="sub">this month</div>
     </div>
     <div class="kpi team">
-      <div class="label">Team statements</div>
+      <div class="label"><svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><circle cx="5.8" cy="5.4" r="2.3" fill="none" stroke="#6B6459" stroke-width="1.5"/><circle cx="11.2" cy="6.2" r="1.8" fill="none" stroke="#6B6459" stroke-width="1.5"/><path d="M1.6 13.4c.5-2.3 2.2-3.5 4.2-3.5s3.7 1.2 4.2 3.5" fill="none" stroke="#6B6459" stroke-width="1.5" stroke-linecap="round"/><path d="M11 9.9c1.7 0 3 1 3.4 2.8" fill="none" stroke="#6B6459" stroke-width="1.5" stroke-linecap="round"/></svg>Team statements</div>
       <div class="value" id="kpiTeam">—</div>
       <div class="sub">this month</div>
     </div>
@@ -2025,7 +2057,18 @@ function renderResults(){
     document.getElementById('downloadZipBtn').addEventListener('click', () => withWho(downloadZip));
   }
 
-  cardsEl.innerHTML = ok.map(it => {
+  // Worth marking when a whole batch comes back clean — the tool spends the
+  // rest of its time pointing out problems.
+  const allBalanced = ok.length > 1 && ok.every(i => i.data.check && i.data.check.verdict === 'ok');
+  const totalRows = ok.reduce((n, i) => n + i.data.transactions.length, 0);
+  const banner = allBalanced
+    ? `<div class="allgood"><div class="tick">&#10003;</div>
+        <div class="say">All ${ok.length} statements balanced.
+        <span>${totalRows.toLocaleString()} transactions, every one matching the statement it came from.</span></div>
+       </div>`
+    : '';
+
+  cardsEl.innerHTML = banner + ok.map(it => {
     const d = it.data;
     const txRows = d.transactions.length
       ? d.transactions.map(t => `<tr>
